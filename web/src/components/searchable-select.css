@@ -1,0 +1,113 @@
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select.disabled {
+  opacity: 0.65;
+}
+
+.searchable-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  min-height: 48px;
+  background: var(--panel-muted);
+  color: var(--ink);
+  text-align: left;
+}
+
+.searchable-select.open .searchable-select-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.searchable-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchable-select-placeholder {
+  flex: 1;
+  color: var(--muted);
+}
+
+.searchable-select-caret {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.searchable-select-panel {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.searchable-select-search {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.searchable-select-search input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--panel-muted);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.searchable-select-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.searchable-select-list {
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.searchable-select-option {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.searchable-select-option:hover,
+.searchable-select-option.selected {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.searchable-select-empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}

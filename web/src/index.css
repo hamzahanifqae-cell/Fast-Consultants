@@ -1,0 +1,202 @@
+:root {
+  /* Fast Consultants — red & white (fastconsultants.pk --theme: #F24E68) */
+  --ink: #16171a;
+  --ink-soft: #2a2b2f;
+  --muted: #5f5f5f;
+  --line: #e8e8ea;
+  --canvas: #f5f5f7;
+  --surface: #ffffff;
+  --accent: #f24e68;
+  --accent-soft: #fff0f3;
+  --accent-strong: #e02a48;
+  --sidebar: #16171a;
+  --sidebar-elevated: #0f1012;
+  --sidebar-line: rgba(255, 255, 255, 0.08);
+  --sidebar-text: rgba(255, 255, 255, 0.78);
+  --danger: #f24e68;
+  --warning: #fcb900;
+  --card-coral: #fff1f4;
+  --card-gold: #fff3c4;
+  --card-teal: #eeeff4;
+  --card-lime: #fff0f3;
+  --font: 'Inter', 'Roboto', system-ui, sans-serif;
+  --font-display: 'Roboto Slab', 'Inter', system-ui, serif;
+  --shadow-sm: 0 4px 16px rgba(22, 23, 26, 0.06);
+  --shadow-md: 0 12px 32px rgba(22, 23, 26, 0.1);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --panel: #ffffff;
+  --panel-muted: #eeeff4;
+  --hero: #16171a;
+  --blue: #f24e68;
+  --blue-soft: #fff0f3;
+}
+
+html[data-theme='dark'] {
+  --ink: #f5f5f7;
+  --ink-soft: #eeeff4;
+  --muted: #a7aaad;
+  --line: #2e3035;
+  --canvas: #0f1012;
+  --surface: #16171a;
+  --accent: #ff6b84;
+  --accent-soft: #3a1218;
+  --accent-strong: #f24e68;
+  --sidebar: #0a0a0b;
+  --sidebar-elevated: #16171a;
+  --sidebar-line: rgba(255, 255, 255, 0.08);
+  --sidebar-text: rgba(255, 255, 255, 0.72);
+  --danger: #ff6b84;
+  --warning: #fcb900;
+  --card-coral: #3a1520;
+  --card-gold: #3a3010;
+  --card-teal: #1e2024;
+  --card-lime: #3a1218;
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --panel: #16171a;
+  --panel-muted: #1e2024;
+  --hero: #0a0a0b;
+  --blue: #ff6b84;
+  --blue-soft: #3a1218;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Shared button look: centered label + light motion everywhere */
+button,
+.primary-btn,
+.ghost-btn,
+.chat-block-btn,
+.chat-composer button,
+.notif-trigger,
+.notif-done,
+.notif-row:not(:disabled),
+.dash-quick-card,
+.chat-list-item,
+.shell-nav-link,
+.dept-picker .chat-list-item {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease,
+    filter 0.18s ease,
+    background-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+button:not(.chat-list-item):not(.notif-row):not(.shell-nav-link),
+a.primary-btn,
+.primary-btn,
+.ghost-btn,
+.chat-block-btn,
+.chat-composer button,
+.notif-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+}
+
+button:hover:not(:disabled):not(.shell-nav-link),
+.primary-btn:hover:not(:disabled),
+.ghost-btn:hover:not(:disabled),
+.chat-block-btn:hover:not(:disabled),
+.chat-composer button:hover:not(:disabled),
+.notif-trigger:hover,
+.notif-done:hover,
+.dash-quick-card:hover,
+.chat-list-item:hover,
+.notif-row:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled):not(.shell-nav-link),
+.primary-btn:active:not(:disabled),
+.ghost-btn:active:not(:disabled),
+.chat-block-btn:active:not(:disabled),
+.chat-composer button:active:not(:disabled),
+.notif-trigger:active,
+.notif-done:active,
+.dash-quick-card:active,
+.chat-list-item:active,
+.notif-row:not(:disabled):active,
+.shell-nav-link:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+button:disabled,
+.primary-btn:disabled,
+.chat-composer button:disabled {
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .primary-btn,
+  .ghost-btn,
+  .chat-block-btn,
+  .chat-composer button,
+  .notif-trigger,
+  .notif-done,
+  .notif-row,
+  .dash-quick-card,
+  .chat-list-item,
+  .shell-nav-link {
+    transition: none;
+  }
+
+  button:hover:not(:disabled),
+  button:active:not(:disabled),
+  .primary-btn:hover:not(:disabled),
+  .primary-btn:active:not(:disabled),
+  .ghost-btn:hover:not(:disabled),
+  .ghost-btn:active:not(:disabled),
+  .dash-quick-card:hover,
+  .dash-quick-card:active,
+  .chat-list-item:hover,
+  .chat-list-item:active,
+  .shell-nav-link:active {
+    transform: none;
+  }
+}

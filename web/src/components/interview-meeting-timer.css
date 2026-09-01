@@ -1,0 +1,77 @@
+.interview-meeting-timer {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--panel-muted);
+}
+
+.interview-meeting-timer.alarm {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  animation: interview-alarm-pulse 1.2s ease-in-out infinite;
+}
+
+.interview-meeting-timer.overdue:not(.alarm) {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.interview-meeting-timer-head {
+  display: grid;
+  gap: 4px;
+}
+
+.interview-meeting-timer-head span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.interview-meeting-timer-digits {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.interview-meeting-timer-parties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.party-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.party-pill.joined {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.interview-meeting-alarm-copy {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.interview-meeting-alarm-copy.ok {
+  color: #166534;
+}
+
+@keyframes interview-alarm-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.04);
+  }
+}

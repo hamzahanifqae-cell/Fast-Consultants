@@ -1,0 +1,71 @@
+.save-feedback-bar {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  animation: save-feedback-slide-in 0.28s ease-out;
+}
+
+html[data-theme='dark'] .save-feedback-bar {
+  background: #052e1d;
+  border-color: #065f46;
+  color: #d1fae5;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.save-feedback-bar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.save-feedback-bar-copy {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.save-feedback-bar-dismiss {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.save-feedback-bar-dismiss:hover {
+  opacity: 1;
+}
+
+@keyframes save-feedback-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

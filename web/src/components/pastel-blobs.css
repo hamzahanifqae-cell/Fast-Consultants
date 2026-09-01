@@ -1,0 +1,50 @@
+.pastel-blobs {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pastel-blob {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+  animation-name: pastel-float;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-fill-mode: both;
+}
+
+@keyframes pastel-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(
+        calc(var(--blob-drift-x, 8px) * 0.6),
+        calc(var(--blob-drift-y, 12px) * -1),
+        0
+      )
+      scale(1.04);
+  }
+  66% {
+    transform: translate3d(
+        calc(var(--blob-drift-x, 8px) * -0.4),
+        calc(var(--blob-drift-y, 12px) * 0.35),
+        0
+      )
+      scale(0.97);
+  }
+  100% {
+    transform: translate3d(var(--blob-drift-x, 8px), var(--blob-drift-y, 12px), 0)
+      scale(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pastel-blob {
+    animation: none;
+  }
+}

@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+.cursor/
+tmp/
+node_modules/
+web/dist/
+web/.env
+mobile/.env
+backend/.env
+

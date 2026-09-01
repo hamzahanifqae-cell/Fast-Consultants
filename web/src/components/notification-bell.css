@@ -1,0 +1,145 @@
+.notif-bell {
+  position: relative;
+}
+
+.notif-trigger {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.notif-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  border: 2px solid var(--surface);
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(380px, calc(100vw - 48px));
+  max-height: min(460px, 70vh);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notif-panel-head strong {
+  font-size: 1.05rem;
+}
+
+.notif-done {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.notif-list {
+  overflow: auto;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.notif-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  text-align: left;
+  border: 0;
+  border-radius: 22px;
+  padding: 12px 14px;
+  background: var(--canvas);
+  color: inherit;
+}
+
+.notif-row.unread {
+  background: var(--accent-soft);
+}
+
+.notif-row.static {
+  cursor: default;
+}
+
+.notif-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  margin-top: 5px;
+  background: var(--line);
+}
+
+.notif-dot.live {
+  background: var(--ink);
+}
+
+.notif-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.notif-message {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.notif-time {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.notif-chevron {
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.notif-empty {
+  margin: 0;
+  padding: 18px 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}

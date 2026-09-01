@@ -1,0 +1,200 @@
+/* Landing extends the shared auth split layout — portal choice lives in one place only. */
+
+.landing-screen {
+  grid-template-rows: 1fr;
+}
+
+.landing-hero {
+  justify-content: center;
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.landing-kicker-row {
+  display: grid;
+  gap: 10px;
+}
+
+.landing-kicker-line {
+  display: block;
+  width: 48px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff6b84, #f24e68);
+  transform-origin: left center;
+  box-shadow: 0 0 18px rgba(242, 78, 104, 0.45);
+  animation: landing-line-in 0.5s ease 0.15s both;
+}
+
+@keyframes landing-line-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.landing-title {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: clamp(2.2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+  font-family: var(--font-display);
+}
+
+.landing-title-line {
+  display: block;
+}
+
+.landing-title-accent {
+  background: linear-gradient(135deg, #ffffff 0%, #ffb3c1 55%, #f24e68 140%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: var(--font-display);
+}
+
+.landing-sub {
+  max-width: 32rem;
+}
+
+.landing-highlights {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  max-width: 30rem;
+}
+
+.landing-highlights li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.landing-highlight-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 0.55em;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b84, #f24e68);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+}
+
+.landing-sheet {
+  position: relative;
+}
+
+.landing-sheet-inner {
+  width: min(100%, 440px);
+  position: relative;
+  z-index: 1;
+}
+
+.landing-sheet-hint {
+  margin-bottom: 18px;
+}
+
+.landing-role-list {
+  max-width: none;
+  margin: 0;
+}
+
+.landing-role-wrap {
+  display: block;
+}
+
+.landing-role-card {
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.landing-role-wrap:hover .landing-role-card,
+.landing-role-wrap:focus-within .landing-role-card {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.landing-role-avatar {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landing-role-wrap:hover .landing-role-avatar {
+  transform: scale(1.06);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.18);
+}
+
+.landing-role-wrap:hover .landing-role-chevron {
+  transform: translateX(4px);
+  opacity: 1;
+}
+
+.landing-role-chevron {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--muted);
+  opacity: 0.55;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.landing-sheet-note {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@media (min-width: 900px) {
+  .landing-hero {
+    padding-left: clamp(40px, 5vw, 64px);
+    padding-right: clamp(24px, 3vw, 40px);
+  }
+
+  .landing-sheet {
+    padding-left: clamp(32px, 4vw, 48px);
+    padding-right: clamp(32px, 4vw, 48px);
+  }
+}
+
+@media (max-width: 899px) {
+  .landing-hero {
+    padding-bottom: 28px;
+  }
+
+  .landing-highlights {
+    margin-top: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-role-card,
+  .landing-title-accent,
+  .landing-kicker-line {
+    animation: none;
+    transition: none;
+  }
+
+  .landing-role-wrap:hover .landing-role-card {
+    transform: none;
+  }
+}

@@ -1,0 +1,77 @@
+.theme-toggle {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.theme-toggle-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.theme-toggle-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-muted);
+}
+
+.theme-toggle-chip {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle-chip:hover {
+  color: var(--ink);
+}
+
+.theme-toggle-chip.active {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.theme-toggle-emoji {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.theme-toggle.on-dark .theme-toggle-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.theme-toggle.on-dark .theme-toggle-row {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.theme-toggle.on-dark .theme-toggle-chip {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.theme-toggle.on-dark .theme-toggle-chip:hover {
+  color: #ffffff;
+}
+
+.theme-toggle.on-dark .theme-toggle-chip.active {
+  background: #ffffff;
+  color: #111111;
+}
