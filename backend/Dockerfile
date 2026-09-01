@@ -3,6 +3,7 @@ FROM php:8.3-cli-bookworm
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
+    pkg-config \
     libpq-dev \
     libzip-dev \
     && docker-php-ext-install pdo pdo_pgsql mbstring bcmath zip opcache \
