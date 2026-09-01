@@ -101,7 +101,10 @@ export function SectionProgress({
         <div className="profile-progress-track">
           <div
             className={`profile-progress-fill${complete ? ' is-complete' : ''}`}
-            style={{ width: loading ? '0%' : `${clamped}%` }}
+            style={{
+              width: loading ? '0%' : `${clamped}%`,
+              ['--progress' as string]: Math.max(clamped, 1),
+            }}
           />
         </div>
         <span className="profile-progress-pct">{loading ? '…' : `${clamped}%`}</span>

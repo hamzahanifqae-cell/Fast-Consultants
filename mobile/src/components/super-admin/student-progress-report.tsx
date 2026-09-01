@@ -256,12 +256,6 @@ export function StudentProgressReport({
                       ]}
                     />
                   </View>
-                  <ThemedText themeColor="textSecondary">{progress?.report ?? 'None'}</ThemedText>
-                  {progress?.meta ? (
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {progress.meta}
-                    </ThemedText>
-                  ) : null}
                 </View>
               );
             })}

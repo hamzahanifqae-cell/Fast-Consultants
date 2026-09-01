@@ -607,15 +607,14 @@ function StudentHome({ firstName }: { firstName: string }) {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={progressPercent}
-              aria-label="Overall application progress"
-              style={{
-                ['--step-color' as string]:
-                  progressSteps[currentProgressIndex]?.color ?? '#34d399',
-              }}>
+              aria-label="Overall application progress">
               <div className="step-progress-bar">
                 <div
                   className="step-progress-fill"
-                  style={{ width: statusQuery.isLoading ? '0%' : `${progressPercent}%` }}>
+                  style={{
+                    width: statusQuery.isLoading ? '0%' : `${progressPercent}%`,
+                    ['--progress' as string]: Math.max(progressPercent, 1),
+                  }}>
                   <span className="step-progress-liquid" aria-hidden />
                 </div>
                 <span className="step-progress-label">

@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { BrandProgressBar } from '@/components/student/brand-progress-bar';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type StudentStackItem = {
@@ -67,25 +68,21 @@ export function StudentStackCards({ items }: Props) {
               </View>
 
               {percent !== null ? (
-                <View
-                  style={[
-                    styles.barTrack,
-                    { backgroundColor: withAlpha(item.color, '55') },
-                  ]}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      {
-                        width: `${Math.max(percent, percent > 0 ? 8 : 0)}%`,
-                        backgroundColor: item.color,
-                      },
-                    ]}
+                <View style={styles.barTrack}>
+                  <BrandProgressBar
+                    borderRadius={18}
+                    complete={percent >= 100}
+                    fluid
+                    height={40}
+                    minFillPercent={8}
+                    percent={percent}
+                    trackColor={withAlpha(Brand.primary, '33')}
                   />
                   <View style={styles.barContent}>
-                    <ThemedText type="caption" style={styles.barText}>
+                    <ThemedText type="caption" style={styles.barTextOnFill}>
                       {label}
                     </ThemedText>
-                    <ThemedText type="caption" style={styles.barText}>
+                    <ThemedText type="caption" style={styles.barTextOnFill}>
                       {percent}%
                     </ThemedText>
                   </View>
@@ -151,12 +148,10 @@ const styles = StyleSheet.create({
     minHeight: 40,
     overflow: 'hidden',
     justifyContent: 'center',
-  },
-  barFill: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 18,
+    position: 'relative',
   },
   barContent: {
+    ...StyleSheet.absoluteFill,
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -176,5 +171,12 @@ const styles = StyleSheet.create({
   },
   barText: {
     fontWeight: '700',
+  },
+  barTextOnFill: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(22, 23, 26, 0.28)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });

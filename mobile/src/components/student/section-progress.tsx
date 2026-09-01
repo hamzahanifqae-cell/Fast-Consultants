@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
+import { BrandProgressBar } from '@/components/student/brand-progress-bar';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type SectionProgressProps = {
@@ -36,21 +37,16 @@ export function SectionProgress({
             {loading ? 'Loading…' : title}
           </ThemedText>
         </View>
-        <ThemedText type="smallBold" style={[styles.pct, { color: complete ? '#039855' : theme.text }]}>
+        <ThemedText type="smallBold" style={[styles.pct, { color: complete ? Brand.success : theme.text }]}>
           {loading ? '…' : `${clamped}%`}
         </ThemedText>
       </View>
-      <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
-        <View
-          style={[
-            styles.fill,
-            {
-              width: loading ? '0%' : `${clamped}%`,
-              backgroundColor: complete ? '#039855' : '#2563eb',
-            },
-          ]}
-        />
-      </View>
+      <BrandProgressBar
+        complete={complete}
+        height={8}
+        percent={loading ? 0 : clamped}
+        trackColor={theme.backgroundSelected}
+      />
     </View>
   );
 }
@@ -79,15 +75,6 @@ const styles = StyleSheet.create({
   description: {
     lineHeight: 19,
     fontSize: 13,
-  },
-  track: {
-    height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    borderRadius: 999,
   },
   pct: {
     fontVariant: ['tabular-nums'],

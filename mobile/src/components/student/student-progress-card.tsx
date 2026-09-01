@@ -1,9 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, type Href } from 'expo-router';
-import { Pressable, StyleSheet, View, type DimensionValue } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { StepProgressBar } from '@/components/student/step-progress-bar';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Brand, Spacing } from '@/constants/theme';
 import {
   currentStudentStep,
   studentProgressPercent,
@@ -22,41 +23,6 @@ type Props = {
   loading?: boolean;
 };
 
-function withAlpha(hex: string, alphaHex: string) {
-  if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-    return `${hex}${alphaHex}`;
-  }
-  return hex;
-}
-
-function StepProgressBar({
-  color,
-  label,
-  percent,
-}: {
-  color: string;
-  label: string;
-  percent: number;
-}) {
-  const width = `${Math.max(percent, percent > 0 ? 8 : 0)}%` as DimensionValue;
-
-  return (
-    <View style={styles.stepTrack}>
-      <View pointerEvents="none" style={[styles.stepFillWrap, { width }]}>
-        <LinearGradient
-          colors={[withAlpha(color, 'E0'), color, withAlpha(color, 'B8')]}
-          end={{ x: 1, y: 0.5 }}
-          start={{ x: 0, y: 0.5 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
-      <ThemedText numberOfLines={1} style={styles.stepLabel}>
-        {label}
-      </ThemedText>
-    </View>
-  );
-}
-
 export function StudentProgressCard({
   status,
   profile,
@@ -68,7 +34,6 @@ export function StudentProgressCard({
   const activeStepIndex = steps.findIndex((step) => !step.done);
   const currentProgressIndex =
     activeStepIndex === -1 ? steps.length - 1 : activeStepIndex;
-  const currentStepColor = steps[currentProgressIndex]?.color ?? '#34d399';
   const currentStep = currentStudentStep(status, profile, appointments);
   const progressLabel = loading
     ? 'Updating progress…'
@@ -76,13 +41,13 @@ export function StudentProgressCard({
 
   return (
     <LinearGradient
-      colors={['#7c3aed', '#4f46e5', '#1e293b']}
+      colors={[Brand.primaryStrong, Brand.primary, Brand.authMid]}
       end={{ x: 1, y: 1 }}
       start={{ x: 0, y: 0 }}
       style={styles.card}>
       <StepProgressBar
-        color={currentStepColor}
         label={progressLabel}
+        loading={loading}
         percent={loading ? 0 : progressPercent}
       />
 
@@ -117,35 +82,11 @@ const styles = StyleSheet.create({
     padding: 22,
     gap: 12,
     overflow: 'hidden',
-    shadowColor: '#7c3aed',
+    shadowColor: Brand.primary,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.28,
     shadowRadius: 20,
     elevation: 8,
-  },
-  stepTrack: {
-    position: 'relative',
-    minHeight: 40,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  stepFillWrap: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  stepLabel: {
-    position: 'relative',
-    zIndex: 1,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   kicker: {
     alignSelf: 'flex-start',
@@ -186,6 +127,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#312e81',
+    color: Brand.primaryStrong,
   },
 });

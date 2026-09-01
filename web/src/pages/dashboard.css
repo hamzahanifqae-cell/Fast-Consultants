@@ -478,12 +478,15 @@ html[data-theme='dark'] .dash-activity-avatar.danger {
 .profile-progress-fill {
   height: 100%;
   border-radius: inherit;
-  background: #2563eb;
+  background: linear-gradient(90deg, #c41e3a 0%, #e02a48 35%, #f24e68 68%, #ffb3c1 100%);
+  background-size: calc(100% / (max(var(--progress, 100), 1) / 100)) 100%;
+  background-repeat: no-repeat;
   transition: width 0.35s ease;
 }
 
 .profile-progress-fill.is-complete {
-  background: #039855;
+  background: linear-gradient(90deg, #2f9e6b 0%, #34d399 100%);
+  background-size: 100% 100%;
 }
 
 .profile-progress-pct {
@@ -934,7 +937,7 @@ html[data-theme='dark'] .status-pill.danger {
   background: linear-gradient(135deg, #f24e68 0%, #e02a48 55%, #16171a 140%);
   color: #fff;
   border: 0;
-  box-shadow: 0 16px 40px rgba(124, 58, 237, 0.28);
+  box-shadow: 0 16px 40px rgba(242, 78, 104, 0.28);
 }
 
 .next-step-progress-bar {
@@ -977,7 +980,7 @@ html[data-theme='dark'] .status-pill.danger {
   width: 100%;
   min-height: 40px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.18);
   overflow: hidden;
 }
 
@@ -986,17 +989,31 @@ html[data-theme='dark'] .status-pill.danger {
   inset: 0 auto 0 0;
   border-radius: 999px;
   overflow: hidden;
+  background: linear-gradient(90deg, #c41e3a 0%, #e02a48 35%, #f24e68 68%, #ffb3c1 100%);
+  background-size: calc(100% / (max(var(--progress, 100), 1) / 100)) 100%;
+  background-repeat: no-repeat;
+  transition: width 0.55s ease;
+}
+
+.next-step-card .step-progress-bar {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.next-step-card .step-progress-fill {
   background: linear-gradient(
-    120deg,
-    color-mix(in srgb, var(--step-color) 88%, white),
-    var(--step-color) 45%,
-    color-mix(in srgb, var(--step-color) 72%, #1e1b4b)
+    90deg,
+    rgba(255, 255, 255, 0.52) 0%,
+    rgba(255, 255, 255, 0.72) 40%,
+    rgba(255, 255, 255, 0.9) 75%,
+    #ffffff 100%
   );
-  background-size: 220% 220%;
-  animation: step-liquid-shift 3.2s linear infinite;
-  transition:
-    width 0.55s ease,
-    background 0.45s ease;
+  background-size: calc(100% / (max(var(--progress, 100), 1) / 100)) 100%;
+  background-repeat: no-repeat;
+}
+
+.next-step-card .step-progress-label {
+  color: #16171a;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.35);
 }
 
 .step-progress-liquid {
@@ -1063,7 +1080,6 @@ html[data-theme='dark'] .status-pill.danger {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .step-progress-fill,
   .step-progress-liquid::before,
   .step-progress-liquid::after {
     animation: none !important;
@@ -1860,6 +1876,249 @@ html[data-theme='dark'] .reject-reason-card {
 
 html[data-theme='dark'] .reject-reason-field textarea {
   background: rgba(0, 0, 0, 0.25);
+}
+
+/* Student status page */
+.status-page .profile-progress-fill:not(.is-complete) {
+  background: linear-gradient(90deg, #c41e3a 0%, #e02a48 35%, #f24e68 68%, #ffb3c1 100%);
+  background-size: calc(100% / (max(var(--progress, 100), 1) / 100)) 100%;
+  background-repeat: no-repeat;
+}
+
+.status-page .profile-progress-fill.is-complete {
+  background: linear-gradient(90deg, #2f9e6b 0%, #34d399 100%);
+  background-size: 100% 100%;
+}
+
+.status-current {
+  display: grid;
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-current-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.status-current-value {
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.status-journey {
+  display: grid;
+  gap: 0;
+}
+
+.status-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 16px;
+  padding-bottom: 20px;
+}
+
+.status-step.is-last {
+  padding-bottom: 0;
+}
+
+.status-step-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.status-step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--line);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 2px var(--line);
+  flex-shrink: 0;
+}
+
+.status-step-line {
+  flex: 1;
+  width: 2px;
+  margin-top: 6px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.status-step.is-complete .status-step-dot {
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.status-step.is-complete .status-step-line {
+  background: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.status-step.is-current .status-step-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.status-step-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.status-step.is-current .status-step-body {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  box-shadow: var(--shadow-sm);
+}
+
+.status-step.is-locked .status-step-body {
+  opacity: 0.72;
+}
+
+.status-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.status-step-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.status-step-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.status-step-badge {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.status-step-badge.is-complete {
+  background: color-mix(in srgb, #039855 12%, var(--surface));
+  color: #027a48;
+}
+
+.status-step-badge.is-current {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.status-step-badge.is-upcoming {
+  background: var(--panel-muted);
+  color: var(--muted);
+}
+
+.status-step-badge.is-locked {
+  background: var(--panel-muted);
+  color: var(--muted);
+}
+
+.status-step-action {
+  justify-self: start;
+  min-height: 38px;
+  padding: 8px 16px;
+}
+
+.status-appointments {
+  display: grid;
+  gap: 10px;
+}
+
+.status-appointment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.status-appointment-row strong {
+  display: block;
+  font-size: 0.98rem;
+}
+
+.status-appointment-row span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.status-appointments-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  border: 1px dashed color-mix(in srgb, var(--line) 90%, var(--muted));
+}
+
+.status-appointments-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.status-appointments-empty strong {
+  display: block;
+  font-size: 0.98rem;
+}
+
+.status-appointments-empty p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+html[data-theme='dark'] .status-step-badge.is-complete {
+  color: #6ce9a6;
+}
+
+@media (max-width: 640px) {
+  .status-step-head {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-appointment-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 

@@ -95,7 +95,10 @@ export function ConsultantStudentDetailPage() {
             <div className="profile-progress-track">
               <div
                 className={`profile-progress-fill${complete ? ' is-complete' : ''}`}
-                style={{ width: detailQuery.isLoading ? '0%' : `${progressPct}%` }}
+                style={{
+                  width: detailQuery.isLoading ? '0%' : `${progressPct}%`,
+                  ['--progress' as string]: Math.max(progressPct, 1),
+                }}
               />
             </div>
             <span className="profile-progress-pct">

@@ -29,6 +29,15 @@ export const Brand = {
   buttonGradient: ['#F24E68', '#E02A48'] as const,
   /** Matches web .auth-screen background */
   authGradient: ['#16171A', '#C41E3A', '#F24E68'] as const,
+  /** Dashboard progress: dark red → bright cherry as the bar advances */
+  progressGradient: ['#C41E3A', '#E02A48', '#F24E68', '#FFB3C1'] as const,
+  /** Progress fill on red hero cards — soft white → full white */
+  progressOnRedGradient: [
+    'rgba(255,255,255,0.52)',
+    'rgba(255,255,255,0.72)',
+    'rgba(255,255,255,0.9)',
+    '#FFFFFF',
+  ] as const,
 } as const;
 
 export const Colors = {

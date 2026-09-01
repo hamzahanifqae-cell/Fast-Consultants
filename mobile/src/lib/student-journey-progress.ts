@@ -50,7 +50,7 @@ export function isProfileComplete(profile: StudentProfile | undefined) {
   );
 }
 
-function isInterviewJourneyComplete(
+export function isInterviewJourneyComplete(
   interview: ApplicationStatusResponse['application']['interview'] | undefined,
 ): boolean {
   if (!interview) return false;
@@ -66,8 +66,208 @@ function isInterviewJourneyComplete(
   );
 }
 
-function isVisaJourneyComplete(appointments: VisaAppointment[]) {
+export function isVisaJourneyComplete(appointments: VisaAppointment[]) {
   return appointments.some((appointment) => appointment.status === 'completed');
+}
+
+export type StatusJourneyState = 'complete' | 'current' | 'upcoming' | 'locked';
+
+export type StatusJourneyStep = {
+  id: string;
+  label: string;
+  detail: string;
+  state: StatusJourneyState;
+  href?: string;
+  actionLabel?: string;
+};
+
+export function statusJourneyStateLabel(state: StatusJourneyState) {
+  if (state === 'complete') return 'Complete';
+  if (state === 'current') return 'In progress';
+  if (state === 'locked') return 'Locked';
+  return 'Up next';
+}
+
+function formatStatusWhen(value: string | null) {
+  if (!value) return 'To be confirmed';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export function overallStatusSummary(
+  status: ApplicationStatusResponse | undefined,
+  profile: StudentProfile | undefined,
+  appointments: VisaAppointment[] = [],
+) {
+  if (!status) {
+    return {
+      percent: 0,
+      title: 'Loading your application',
+      description: 'Fetching your latest checklist and stage details.',
+    };
+  }
+
+  const profileDone = isProfileComplete(profile);
+  const steps = [
+    profileDone,
+    Boolean(status.checklist.documents.accepted),
+    Boolean(status.checklist.charge_receipts.accepted),
+    Boolean(status.application.preparation.completed_at),
+    isInterviewJourneyComplete(status.application.interview),
+    isVisaJourneyComplete(appointments),
+  ];
+  const done = steps.filter(Boolean).length;
+  const percent = Math.round((done / steps.length) * 100);
+  const currentFocus = profileDone ? status.current_status : 'Student info';
+
+  if (percent >= 100) {
+    return {
+      percent: 100,
+      title: 'Application complete',
+      description: 'Personal info, documents, fees, interview, and visa are all finished.',
+    };
+  }
+
+  if (steps[4] && !steps[5]) {
+    return {
+      percent,
+      title: 'Visa stage in progress',
+      description: appointments.some((a) => a.status === 'scheduled')
+        ? 'Your interview is done. Attend your scheduled visa appointment next.'
+        : 'Interview complete. Visa staff will schedule your embassy appointment.',
+    };
+  }
+
+  return {
+    percent,
+    title: 'Application in progress',
+    description: `${done} of ${steps.length} stages complete · Current focus: ${currentFocus}`,
+  };
+}
+
+export function buildStatusJourneySteps(
+  status: ApplicationStatusResponse | undefined,
+  profile: StudentProfile | undefined,
+  appointments: VisaAppointment[] = [],
+): StatusJourneyStep[] {
+  if (!status) return [];
+
+  const profileDone = isProfileComplete(profile);
+  const docsDone = Boolean(status.checklist.documents.accepted);
+  const feesDone = Boolean(status.checklist.charge_receipts.accepted);
+  const prepDone = Boolean(status.application.preparation.completed_at);
+  const interviewDone = isInterviewJourneyComplete(status.application.interview);
+  const visaDone = isVisaJourneyComplete(appointments);
+
+  const flags = [profileDone, docsDone, feesDone, prepDone, interviewDone, visaDone];
+  const firstOpen = flags.findIndex((done) => !done);
+
+  function stateFor(index: number): StatusJourneyState {
+    if (flags[index]) return 'complete';
+    if (firstOpen === -1) return 'complete';
+    if (index === firstOpen) return 'current';
+    return 'locked';
+  }
+
+  const docs = status.checklist.documents;
+  const fees = status.checklist.charge_receipts;
+  const interview = status.application.interview;
+
+  return [
+    {
+      id: 'profile',
+      label: 'Student info',
+      detail: profileDone
+        ? 'Personal details submitted'
+        : 'Add phone, nationality, passport, CNIC, and other details',
+      state: stateFor(0),
+      href: '/student-personal-information',
+      actionLabel: profileDone ? 'View' : 'Open',
+    },
+    {
+      id: 'documents',
+      label: 'Documents',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : docsDone
+          ? 'All required files approved'
+          : `${docs.approved} approved · ${docs.pending} pending review`,
+      state: !profileDone ? 'locked' : stateFor(1),
+      href: '/student-documents',
+      actionLabel: docsDone ? 'View' : 'Open',
+    },
+    {
+      id: 'fees',
+      label: 'Charge receipts',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : feesDone
+          ? 'All fee slips cleared'
+          : `${fees.approved} approved · ${fees.pending} awaiting action`,
+      state: !profileDone ? 'locked' : stateFor(2),
+      href: '/student-charge-receipts',
+      actionLabel: feesDone ? 'View' : 'Open',
+    },
+    {
+      id: 'preparation',
+      label: 'Interview preparation',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : !status.preparation_available
+          ? 'Unlocks after documents and fees are approved'
+          : prepDone
+            ? 'Preparation checklist completed'
+            : 'Preparation notes are ready for you',
+      state: !profileDone || !status.preparation_available
+        ? 'locked'
+        : prepDone
+          ? 'complete'
+          : stateFor(3),
+      href: status.preparation_available ? '/student-interview' : undefined,
+      actionLabel: prepDone ? 'View' : 'Open',
+    },
+    {
+      id: 'interview',
+      label: 'Interview meeting',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : !status.interview_available
+          ? 'Scheduled after preparation is complete'
+          : isInterviewMeetingCancelled(interview)
+            ? 'Meeting cancelled — staff will reschedule'
+            : interview.at
+              ? `Scheduled ${formatStatusWhen(interview.at)}`
+              : interview.status_label ?? 'Interview stage active',
+      state: !profileDone || !status.interview_available
+        ? 'locked'
+        : interviewDone
+          ? 'complete'
+          : stateFor(4),
+      href: status.interview_available ? '/student-interview' : undefined,
+      actionLabel: 'Open',
+    },
+    {
+      id: 'visa',
+      label: 'Visa appointment',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : visaDone
+          ? 'Embassy appointment completed'
+          : appointments.some((a) => a.status === 'scheduled')
+            ? 'Appointment scheduled — see details below'
+            : 'Visa staff will book after interview',
+      state: !profileDone ? 'locked' : stateFor(5),
+      href: '/student-visa-appointments',
+      actionLabel: appointments.length ? 'View' : undefined,
+    },
+  ];
 }
 
 export function studentProgressSteps(
