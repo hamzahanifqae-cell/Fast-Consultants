@@ -15,7 +15,7 @@ use App\Services\StudentApplicationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Storage;
+use App\Support\UploadStorage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChargeReceiptController extends Controller
@@ -56,7 +56,7 @@ class ChargeReceiptController extends Controller
         $file = $request->file('file');
         $path = $file->store(
             'charge-receipts/consultant/'.$request->user()->id,
-            'local',
+            UploadStorage::diskName(),
         );
 
         $receipt = ChargeReceipt::query()->create([
@@ -95,7 +95,7 @@ class ChargeReceiptController extends Controller
         $file = $request->file('file');
         $path = $file->store(
             'charge-receipts/student/'.$request->user()->id,
-            'local',
+            UploadStorage::diskName(),
         );
 
         $chargeReceipt->update([
@@ -177,9 +177,9 @@ class ChargeReceiptController extends Controller
     public function downloadConsultantFile(Request $request, ChargeReceipt $chargeReceipt): StreamedResponse
     {
         $this->assertCanAccess($request, $chargeReceipt);
-        abort_unless(Storage::disk('local')->exists($chargeReceipt->consultant_file_path), 404);
+        abort_unless(UploadStorage::disk()->exists($chargeReceipt->consultant_file_path), 404);
 
-        return Storage::disk('local')->download(
+        return UploadStorage::disk()->download(
             $chargeReceipt->consultant_file_path,
             $chargeReceipt->consultant_original_name,
         );
@@ -189,9 +189,9 @@ class ChargeReceiptController extends Controller
     {
         $this->assertCanAccess($request, $chargeReceipt);
         abort_unless($chargeReceipt->student_file_path !== null, 404);
-        abort_unless(Storage::disk('local')->exists($chargeReceipt->student_file_path), 404);
+        abort_unless(UploadStorage::disk()->exists($chargeReceipt->student_file_path), 404);
 
-        return Storage::disk('local')->download(
+        return UploadStorage::disk()->download(
             $chargeReceipt->student_file_path,
             $chargeReceipt->student_original_name ?? 'student-slip.pdf',
         );

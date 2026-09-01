@@ -12,7 +12,7 @@ use App\Services\StudentApplicationService;
 use App\Services\StudentNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Storage;
+use App\Support\UploadStorage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ConsultantStudentDocumentController extends Controller
@@ -46,9 +46,9 @@ class ConsultantStudentDocumentController extends Controller
     public function download(Request $request, StudentDocument $document): StreamedResponse
     {
         $this->assertCanAccessDocuments($request);
-        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+        abort_unless(UploadStorage::disk()->exists($document->file_path), 404);
 
-        return Storage::disk('local')->response(
+        return UploadStorage::disk()->response(
             $document->file_path,
             $document->original_name,
             [

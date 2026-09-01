@@ -8,6 +8,7 @@
     "scheme": "educationconsultant",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.fastconsultants.app",
       "icon": "./assets/images/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required for in-app interview video calls.",
@@ -18,6 +19,7 @@
       }
     },
     "android": {
+      "package": "com.fastconsultants.app",
       "adaptiveIcon": {
         "backgroundColor": "#F24E68",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

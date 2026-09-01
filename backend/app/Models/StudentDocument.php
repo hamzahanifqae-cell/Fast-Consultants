@@ -7,7 +7,7 @@ use App\Enums\DocumentType;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use App\Support\UploadStorage;
 
 #[Fillable([
     'user_id',
@@ -55,8 +55,8 @@ class StudentDocument extends Model
 
     public function deleteFile(): void
     {
-        if ($this->file_path && Storage::disk('local')->exists($this->file_path)) {
-            Storage::disk('local')->delete($this->file_path);
+        if ($this->file_path && UploadStorage::disk()->exists($this->file_path)) {
+            UploadStorage::disk()->delete($this->file_path);
         }
     }
 }

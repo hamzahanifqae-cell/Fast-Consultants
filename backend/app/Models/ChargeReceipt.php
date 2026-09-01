@@ -6,7 +6,7 @@ use App\Enums\ChargeReceiptStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use App\Support\UploadStorage;
 
 #[Fillable([
     'consultant_id',
@@ -61,15 +61,15 @@ class ChargeReceipt extends Model
 
     public function deleteConsultantFile(): void
     {
-        if ($this->consultant_file_path && Storage::disk('local')->exists($this->consultant_file_path)) {
-            Storage::disk('local')->delete($this->consultant_file_path);
+        if ($this->consultant_file_path && UploadStorage::disk()->exists($this->consultant_file_path)) {
+            UploadStorage::disk()->delete($this->consultant_file_path);
         }
     }
 
     public function deleteStudentFile(): void
     {
-        if ($this->student_file_path && Storage::disk('local')->exists($this->student_file_path)) {
-            Storage::disk('local')->delete($this->student_file_path);
+        if ($this->student_file_path && UploadStorage::disk()->exists($this->student_file_path)) {
+            UploadStorage::disk()->delete($this->student_file_path);
         }
     }
 }

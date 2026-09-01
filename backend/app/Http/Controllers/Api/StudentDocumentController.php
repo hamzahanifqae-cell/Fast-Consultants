@@ -14,7 +14,7 @@ use App\Services\StudentNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Storage;
+use App\Support\UploadStorage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentDocumentController extends Controller
@@ -40,7 +40,7 @@ class StudentDocumentController extends Controller
 
         $path = $file->store(
             'student-documents/'.$request->user()->id,
-            'local',
+            UploadStorage::diskName(),
         );
 
         $document = StudentDocument::query()->create([
@@ -93,7 +93,7 @@ class StudentDocumentController extends Controller
         if ($file) {
             $path = $file->store(
                 'student-documents/'.$request->user()->id,
-                'local',
+                UploadStorage::diskName(),
             );
             $document->deleteFile();
             $attributes['original_name'] = $file->getClientOriginalName();
@@ -136,9 +136,9 @@ class StudentDocumentController extends Controller
     public function download(Request $request, StudentDocument $document): StreamedResponse
     {
         abort_unless($document->user_id === $request->user()->id, 403);
-        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+        abort_unless(UploadStorage::disk()->exists($document->file_path), 404);
 
-        return Storage::disk('local')->download(
+        return UploadStorage::disk()->download(
             $document->file_path,
             $document->original_name,
         );

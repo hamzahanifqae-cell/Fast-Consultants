@@ -17,6 +17,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Uploads Disk
+    |--------------------------------------------------------------------------
+    |
+    | Student documents and charge receipts. Set to "s3" in production with
+    | Supabase Storage or any S3-compatible bucket.
+    |
+    */
+
+    'uploads_disk' => env('FILESYSTEM_UPLOADS_DISK', env('FILESYSTEM_DISK', 'local')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
