@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { AppLoader } from '@/components/app-loader';
-import { api } from '@/lib/api';
+import { api, warmApiServer } from '@/lib/api';
 import { createAppQueryClient } from '@/lib/query-client';
 import { registerMutationSync } from '@/lib/query-sync';
 import { portalFromPath } from '@/lib/portals';
@@ -20,6 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    warmApiServer();
     hydrateTheme();
     const portal = portalFromPath(window.location.pathname);
     void hydrate(portal);

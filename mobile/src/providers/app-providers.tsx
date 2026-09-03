@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { type PropsWithChildren, useEffect, useState } from 'react';
 
-import { api } from '@/lib/api';
+import { api, warmApiServer } from '@/lib/api';
 import { createAppQueryClient } from '@/lib/query-client';
 import { registerMutationSync, setupMobileFocusSync } from '@/lib/query-sync';
 
@@ -12,7 +12,10 @@ export function AppProviders({ children }: PropsWithChildren) {
     return client;
   });
 
-  useEffect(() => setupMobileFocusSync(), []);
+  useEffect(() => {
+    warmApiServer();
+    return setupMobileFocusSync();
+  }, []);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

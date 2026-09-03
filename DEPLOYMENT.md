@@ -117,5 +117,8 @@ eas submit --platform ios
 ## Notes
 
 - Render **free** tier sleeps after ~15 min idle (cold start ~30–60s).
+- Railway also slows down when idle on free/limited credit. This repo includes
+  `.github/workflows/keep-api-awake.yml` (pings `/up` every 5 minutes) plus
+  client warm-up + retries so logins fail less often without upgrading.
 - Do not commit `.env` files or tokens.
 - Revoke any PAT shared in chat; use `gh auth login` instead.
