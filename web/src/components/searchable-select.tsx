@@ -14,6 +14,8 @@ type Props = {
   searchPlaceholder?: string;
   disabled?: boolean;
   emptyMessage?: string;
+  /** When false, opens as a simple dropdown without a search box. */
+  searchable?: boolean;
   onChange: (value: string) => void;
 };
 
@@ -24,6 +26,7 @@ export function SearchableSelect({
   searchPlaceholder = 'Search…',
   disabled = false,
   emptyMessage = 'No matches',
+  searchable = true,
   onChange,
 }: Props) {
   const listId = useId();
@@ -70,10 +73,10 @@ export function SearchableSelect({
   }, [open]);
 
   useEffect(() => {
-    if (open) {
+    if (open && searchable) {
       requestAnimationFrame(() => searchRef.current?.focus());
     }
-  }, [open]);
+  }, [open, searchable]);
 
   function toggle() {
     if (disabled) return;
@@ -109,15 +112,17 @@ export function SearchableSelect({
 
       {open ? (
         <div className="searchable-select-panel" id={listId} role="listbox">
-          <div className="searchable-select-search">
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-            />
-          </div>
+          {searchable ? (
+            <div className="searchable-select-search">
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+              />
+            </div>
+          ) : null}
           <div className="searchable-select-list">
             {filtered.length ? (
               filtered.map((option) => (

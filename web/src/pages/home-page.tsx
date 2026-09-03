@@ -948,7 +948,7 @@ function SuperAdminHome({
                       </span>
                     </div>
                     {(conversation.unread_count ?? 0) > 0 ? (
-                      <span className="status-pill warn">{conversation.unread_count}</span>
+                      <span className="chat-unread-badge">{conversation.unread_count}</span>
                     ) : null}
                   </Link>
                 ))}
@@ -1193,7 +1193,7 @@ function StaffHome({
                           </span>
                         </div>
                         {(conversation.unread_count ?? 0) > 0 ? (
-                          <span className="status-pill warn">{conversation.unread_count}</span>
+                          <span className="chat-unread-badge">{conversation.unread_count}</span>
                         ) : null}
                       </Link>
                     ))}

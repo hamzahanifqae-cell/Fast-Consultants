@@ -20,11 +20,24 @@
   background: var(--panel-muted);
   color: var(--ink);
   text-align: left;
+  box-shadow: none;
+}
+
+.searchable-select-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--surface);
+  transform: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.searchable-select-trigger:active:not(:disabled) {
+  transform: none;
 }
 
 .searchable-select.open .searchable-select-trigger {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .searchable-select-value {
@@ -96,12 +109,34 @@
   color: var(--ink);
   text-align: left;
   justify-content: flex-start;
+  font-weight: 500;
 }
 
-.searchable-select-option:hover,
+.searchable-select-option:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
+  transform: none;
+}
+
 .searchable-select-option.selected {
   background: var(--accent-soft);
   color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.searchable-select-option.selected:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--accent-soft));
+  color: var(--accent-strong);
+  transform: none;
+}
+
+html[data-theme='dark'] .searchable-select-option:hover {
+  background: var(--panel-muted);
+}
+
+html[data-theme='dark'] .searchable-select-option.selected {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  color: #ff8fa3;
 }
 
 .searchable-select-empty {

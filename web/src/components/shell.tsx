@@ -37,7 +37,7 @@ function navClassName({ isActive }: { isActive: boolean }) {
   return `shell-nav-link${isActive ? ' active' : ''}`;
 }
 
-export function AppShell({ title, subtitle, children, badge, backTo, backLabel }: AppShellProps) {
+export function AppShell({ title, subtitle, children, badge: _badge, backTo, backLabel }: AppShellProps) {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
@@ -161,9 +161,6 @@ export function AppShell({ title, subtitle, children, badge, backTo, backLabel }
           <div className="shell-header-copy">
             {backTo ? (
               <PageBackButton to={backTo} label={backLabel ?? 'Back'} className="shell-header-back" />
-            ) : null}
-            {badge && badge.toLowerCase() !== title.toLowerCase() ? (
-              <span className="shell-badge">{badge}</span>
             ) : null}
             <h1>{title}</h1>
             {subtitle ? <p>{subtitle}</p> : null}

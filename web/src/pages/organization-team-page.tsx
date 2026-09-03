@@ -3,6 +3,7 @@ import { type FormEvent, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import { PageEmpty, PageStats, PageTips } from '@/components/page-fill';
+import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { departmentRoutes } from '@/lib/department-routes';
@@ -298,30 +299,35 @@ export function OrganizationTeamPage() {
               </label>
               <label className="field">
                 <span>Role</span>
-                <select
+                <SearchableSelect
+                  searchable={false}
                   value={draft.role}
-                  onChange={(event) =>
+                  placeholder="Select role"
+                  options={[
+                    { value: 'admin', label: 'Admin' },
+                    { value: 'staff', label: 'Staff' },
+                  ]}
+                  onChange={(value) =>
                     setDraft({
                       ...draft,
-                      role: event.target.value as 'admin' | 'staff',
+                      role: value as 'admin' | 'staff',
                     })
-                  }>
-                  <option value="admin">Admin</option>
-                  <option value="staff">Staff</option>
-                </select>
+                  }
+                />
               </label>
               {draft.role === 'staff' ? (
                 <label className="field">
                   <span>Staff department</span>
-                  <select
+                  <SearchableSelect
+                    searchable={false}
                     value={draft.staff_department}
-                    onChange={(event) => onDepartmentChange(event.target.value)}>
-                    {departmentOptions.map((department) => (
-                      <option key={department.value} value={department.value}>
-                        {department.label}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Select department"
+                    options={departmentOptions.map((department) => ({
+                      value: department.value,
+                      label: department.label,
+                    }))}
+                    onChange={(value) => onDepartmentChange(value)}
+                  />
                 </label>
               ) : null}
 

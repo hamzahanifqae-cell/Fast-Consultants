@@ -1183,8 +1183,8 @@ html[data-theme='dark'] .status-pill.danger {
 
 .chat-list-back {
   border: 0;
-  background: var(--surface-muted, #f5f5f5);
-  color: var(--text);
+  background: var(--panel-muted);
+  color: var(--ink);
   text-align: left;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
@@ -1195,12 +1195,14 @@ html[data-theme='dark'] .status-pill.danger {
 
 .chat-list-item:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.72;
 }
 
 .chat-list-item {
   border: 0;
+  border-left: 3px solid transparent;
   background: transparent;
+  color: var(--ink);
   text-align: left;
   padding: 16px 18px;
   border-bottom: 1px solid var(--line);
@@ -1218,6 +1220,7 @@ html[data-theme='dark'] .status-pill.danger {
   width: 100%;
   min-width: 0;
   text-align: left;
+  color: var(--muted);
 }
 
 .chat-list-item-top {
@@ -1238,19 +1241,42 @@ html[data-theme='dark'] .status-pill.danger {
   border-radius: 999px;
   display: inline-grid;
   place-items: center;
-  background: var(--ink);
-  color: var(--surface);
+  background: var(--accent);
+  color: #ffffff;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1;
 }
 
+/* Unread message counts on home lists use the same red badge treatment */
+.status-pill.warn.is-unread,
+.dash-unread-count {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.chat-list-item:hover:not(:disabled) {
+  background: var(--panel-muted);
+}
+
 .chat-list-item.active {
   background: var(--accent-soft);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.chat-list-item.active strong {
+  color: var(--accent-strong);
+}
+
+.chat-list-item.active .chat-list-item-preview {
+  color: var(--ink-soft);
 }
 
 .chat-list-item strong {
+  color: var(--ink);
   font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .chat-list-item span {
@@ -1260,6 +1286,19 @@ html[data-theme='dark'] .status-pill.danger {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
+}
+
+html[data-theme='dark'] .chat-list-item.active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+html[data-theme='dark'] .chat-list-item.active strong {
+  color: #ff8fa3;
+}
+
+html[data-theme='dark'] .chat-list-item.active .chat-list-item-preview {
+  color: #e8eaed;
 }
 
 .chat-thread {
@@ -1555,16 +1594,27 @@ html[data-theme='dark'] .chat-block-btn.unblock {
 .org-permissions {
   border: 1px solid var(--line);
   border-radius: 18px;
-  padding: 14px 16px;
+  padding: 16px 18px 18px;
   display: grid;
   gap: 10px;
   background: var(--panel-muted);
+  min-width: 0;
 }
 
 .org-permissions legend {
-  padding: 0 6px;
+  float: left;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
   font-weight: 700;
   color: var(--ink);
+  line-height: 1.3;
+}
+
+.org-permissions::after {
+  content: '';
+  display: table;
+  clear: both;
 }
 
 .check-row {
@@ -2279,7 +2329,7 @@ html[data-theme='dark'] .status-step-badge.is-complete {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
 }
 
 .student-progress-filters {
@@ -2379,7 +2429,7 @@ html[data-theme='dark'] .status-step-badge.is-complete {
 .student-progress-report-section p {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--text);
+  color: var(--ink);
   line-height: 1.35;
 }
 
@@ -2390,7 +2440,7 @@ html[data-theme='dark'] .status-step-badge.is-complete {
 
 .student-progress-report-lines span {
   font-size: 0.8rem;
-  color: var(--text);
+  color: var(--ink);
   line-height: 1.35;
 }
 
