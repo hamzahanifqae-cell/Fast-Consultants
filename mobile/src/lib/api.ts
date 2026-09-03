@@ -57,9 +57,10 @@ api.interceptors.response.use(
       throw error;
     }
 
-    config.__retryCount = retryCount + 1;
+    const nextRetry = retryCount + 1;
+    config.__retryCount = nextRetry;
     warmApiServer();
-    await new Promise((resolve) => setTimeout(resolve, 1200 * config.__retryCount));
+    await new Promise((resolve) => setTimeout(resolve, 1200 * nextRetry));
     return api.request(config);
   },
 );
