@@ -125,7 +125,7 @@ button,
     opacity 0.18s ease;
 }
 
-button:not(.chat-list-item):not(.notif-row):not(.shell-nav-link):not(.searchable-select-trigger):not(.searchable-select-option):not(.page-back-btn),
+button:not(.chat-list-item):not(.notif-row):not(.shell-nav-link):not(.searchable-select-trigger):not(.searchable-select-option):not(.page-back-btn):not(.dept-directory-row),
 a.primary-btn,
 .primary-btn,
 .ghost-btn,
@@ -139,7 +139,7 @@ a.primary-btn,
   line-height: 1.2;
 }
 
-button:hover:not(:disabled):not(.shell-nav-link),
+button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row),
 .primary-btn:hover:not(:disabled),
 .ghost-btn:hover:not(:disabled),
 .chat-block-btn:hover:not(:disabled),
@@ -152,7 +152,7 @@ button:hover:not(:disabled):not(.shell-nav-link),
   transform: translateY(-1px);
 }
 
-button:active:not(:disabled):not(.shell-nav-link),
+button:active:not(:disabled):not(.shell-nav-link):not(.dept-directory-row),
 .primary-btn:active:not(:disabled),
 .ghost-btn:active:not(:disabled),
 .chat-block-btn:active:not(:disabled),
