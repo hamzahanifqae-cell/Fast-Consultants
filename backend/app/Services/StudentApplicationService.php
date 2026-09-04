@@ -117,6 +117,16 @@ class StudentApplicationService
                     'accepted' => $receipts->isNotEmpty() && $receiptsPending === 0 && $receiptsRejected === 0 && $receiptsApproved === $receipts->count(),
                 ],
             ],
+            // What the next department in the chain is allowed to start.
+            'handoff' => [
+                'documents_approved' => $documents->isNotEmpty()
+                    && $documentsApproved === $documents->count(),
+                'universities_shared' => $application->student
+                    ? $application->student->assignedUniversities()->exists()
+                    : false,
+                'fees_cleared' => $receipts->isNotEmpty()
+                    && $receiptsApproved === $receipts->count(),
+            ],
             'preparation_available' => $application->everything_accepted && $application->preparation_unlocked_at !== null,
             'interview_available' => $application->interview_unlocked_at !== null
                 || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true),

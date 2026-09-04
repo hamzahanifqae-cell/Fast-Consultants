@@ -240,6 +240,54 @@ class ChatTest extends TestCase
         ])->assertCreated();
     }
 
+    public function test_a_block_from_one_department_leaves_other_departments_open(): void
+    {
+        $student = User::factory()->student()->create(['name' => 'Sara']);
+        $finance = $this->makeStaff('finance@example.com', StaffDepartment::Finance, 'Finance Staff');
+
+        Sanctum::actingAs($student);
+        $financeChat = $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Finance->value,
+            'message' => 'Hello finance',
+        ])->assertCreated();
+
+        $financeId = $financeChat->json('data.conversation.id');
+
+        Sanctum::actingAs($finance);
+        $this->postJson("/api/chat/conversations/{$financeId}/block")
+            ->assertOk()
+            ->assertJsonPath('data.conversation.is_blocked', true);
+
+        Sanctum::actingAs($student);
+
+        // Blocked in finance…
+        $this->postJson("/api/chat/conversations/{$financeId}/messages", [
+            'body' => 'Still trying',
+        ])->assertForbidden();
+
+        // …but visa is untouched, both for a new thread and for sending in it.
+        $visaChat = $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Visa->value,
+            'message' => 'Hello visa',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.conversation.is_blocked', false);
+
+        $visaId = $visaChat->json('data.conversation.id');
+
+        $this->postJson("/api/chat/conversations/{$visaId}/messages", [
+            'body' => 'Visa question',
+        ])->assertCreated();
+
+        $this->getJson("/api/chat/conversations/{$visaId}/messages")
+            ->assertOk()
+            ->assertJsonPath('data.conversation.is_blocked', false);
+
+        $this->getJson("/api/chat/conversations/{$financeId}/messages")
+            ->assertOk()
+            ->assertJsonPath('data.conversation.is_blocked', true);
+    }
+
     private function makeStaff(string $email, StaffDepartment $department, string $name = 'Staff'): User
     {
         $user = User::factory()->create([

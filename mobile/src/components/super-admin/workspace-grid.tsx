@@ -41,8 +41,8 @@ export function WorkspaceGrid({ items }: Props) {
             <View style={[styles.iconWrap, { backgroundColor: item.tint }]}>
               <ThemedText style={styles.emoji}>{item.emoji}</ThemedText>
               {(item.badge ?? 0) > 0 ? (
-                <View style={[styles.badge, { backgroundColor: theme.warningMuted }]}>
-                  <ThemedText style={styles.badgeText} type="caption">
+                <View style={[styles.badge, { backgroundColor: theme.primary }]}>
+                  <ThemedText style={[styles.badgeText, { color: theme.onPrimary }]} type="caption">
                     {item.badge! > 99 ? '99+' : item.badge}
                   </ThemedText>
                 </View>

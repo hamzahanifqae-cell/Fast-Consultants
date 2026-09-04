@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { AppIcon } from '@/components/app-icon';
 import { Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,7 +26,7 @@ export function ChatFab({ onPress }: ChatFabProps) {
           shadowColor: '#000000',
         },
       ]}>
-      <SymbolView name="message.fill" size={22} tintColor={theme.invertedText} type="hierarchical" />
+      <AppIcon name="message.fill" size={22} tintColor={theme.invertedText} />
     </Pressable>
   );
 }

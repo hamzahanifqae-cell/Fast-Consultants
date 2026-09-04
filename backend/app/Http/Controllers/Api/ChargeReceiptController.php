@@ -10,6 +10,8 @@ use App\Http\Requests\Api\UpdateChargeReceiptStatusRequest;
 use App\Http\Requests\Api\UploadStudentChargeReceiptRequest;
 use App\Http\Resources\ChargeReceiptResource;
 use App\Models\ChargeReceipt;
+use App\Models\User;
+use App\Services\DepartmentHandoffService;
 use App\Services\StudentNotificationService;
 use App\Services\StudentApplicationService;
 use Illuminate\Http\JsonResponse;
@@ -23,11 +25,14 @@ class ChargeReceiptController extends Controller
     public function __construct(
         private readonly StudentApplicationService $applications,
         private readonly StudentNotificationService $notifications,
+        private readonly DepartmentHandoffService $handoffs,
     )
     {
     }
     public function consultantIndex(Request $request): AnonymousResourceCollection
     {
+        $this->assertFinanceStaff($request);
+
         $receipts = ChargeReceipt::query()
             ->with(['student:id,name,email', 'consultant:id,name,email'])
             ->when(
@@ -53,6 +58,16 @@ class ChargeReceiptController extends Controller
 
     public function store(StoreChargeReceiptRequest $request): JsonResponse
     {
+        $this->assertFinanceStaff($request);
+
+        $student = User::query()->findOrFail($request->integer('student_id'));
+
+        abort_unless(
+            $this->handoffs->universitiesShared($student),
+            422,
+            'Universities has not shared an option with this student yet.',
+        );
+
         $file = $request->file('file');
         $path = $file->store(
             'charge-receipts/consultant/'.$request->user()->id,
@@ -74,6 +89,8 @@ class ChargeReceiptController extends Controller
         ]);
 
         $receipt->load(['student:id,name,email', 'consultant:id,name,email']);
+
+        $this->handoffs->syncFees($receipt->student, $request->user());
 
         return ChargeReceiptResource::make($receipt)
             ->response()
@@ -118,6 +135,8 @@ class ChargeReceiptController extends Controller
             '/departments/finance',
         );
 
+        $this->handoffs->syncFees($request->user(), $request->user());
+
         return ChargeReceiptResource::make($chargeReceipt);
     }
 
@@ -125,7 +144,7 @@ class ChargeReceiptController extends Controller
         UpdateChargeReceiptStatusRequest $request,
         ChargeReceipt $chargeReceipt,
     ): ChargeReceiptResource {
-        abort_unless($request->user()?->isConsultant(), 403);
+        $this->assertFinanceStaff($request);
         abort_unless(
             $chargeReceipt->status === ChargeReceiptStatus::AwaitingReview,
             422,
@@ -158,6 +177,8 @@ class ChargeReceiptController extends Controller
             $status === ChargeReceiptStatus::Approved ? 'charge_receipt_approved' : 'charge_receipt_rejected',
             '/student-charge-receipts',
         );
+
+        $this->handoffs->syncFees($chargeReceipt->student, $request->user());
 
         $afterApplication = $this->applications->forStudent($chargeReceipt->student);
 
@@ -202,8 +223,18 @@ class ChargeReceiptController extends Controller
         $user = $request->user();
 
         abort_unless(
-            $user->isConsultant() || $chargeReceipt->student_id === $user->id,
+            $user->canWorkInDepartment(StaffDepartment::Finance)
+                || $chargeReceipt->student_id === $user->id,
             403,
+        );
+    }
+
+    private function assertFinanceStaff(Request $request): void
+    {
+        abort_unless(
+            $request->user()?->canWorkInDepartment(StaffDepartment::Finance),
+            403,
+            'Only A/C & Finance staff can manage charges.',
         );
     }
 }

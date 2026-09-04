@@ -21,20 +21,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   hydrated: false,
   hydrate: async () => {
-    const token = await SecureStore.getItemAsync(TOKEN_KEY);
-
-    if (!token) {
-      set({ token: null, user: null, hydrated: true });
-      return;
-    }
-
     try {
-      const { data } = await api.get<{ user: AuthUser }>('/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      set({ token, user: data.user, hydrated: true });
+      const token = await SecureStore.getItemAsync(TOKEN_KEY);
+
+      if (!token) {
+        set({ token: null, user: null, hydrated: true });
+        return;
+      }
+
+      try {
+        const { data } = await api.get<{ user: AuthUser }>('/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        set({ token, user: data.user, hydrated: true });
+      } catch {
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        set({ token: null, user: null, hydrated: true });
+      }
     } catch {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
       set({ token: null, user: null, hydrated: true });
     }
   },

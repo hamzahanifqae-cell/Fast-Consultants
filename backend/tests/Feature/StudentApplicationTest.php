@@ -75,6 +75,10 @@ class StudentApplicationTest extends TestCase
     {
         $student = User::factory()->student()->create();
         $consultant = User::factory()->consultant()->create();
+        $consultant->syncPermissions([
+            \App\Enums\Permission::InterviewView->value,
+            \App\Enums\Permission::InterviewManage->value,
+        ]);
 
         StudentDocument::query()->create([
             'user_id' => $student->id,

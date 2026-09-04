@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\StaffDepartment;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UniversityResource;
 use App\Models\University;
 use App\Models\User;
+use App\Services\DepartmentHandoffService;
 use App\Services\StudentNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,12 +18,13 @@ class StudentUniversityController extends Controller
 {
     public function __construct(
         private readonly StudentNotificationService $notifications,
+        private readonly DepartmentHandoffService $handoffs,
     ) {
     }
 
     public function index(Request $request, User $student): AnonymousResourceCollection
     {
-        abort_unless($request->user()?->isConsultant(), 403);
+        $this->assertUniversitiesStaff($request);
         abort_unless($student->isStudent(), 404);
 
         $universities = $student->assignedUniversities()
@@ -34,8 +37,14 @@ class StudentUniversityController extends Controller
 
     public function store(Request $request, User $student): JsonResponse
     {
-        abort_unless($request->user()?->isConsultant(), 403);
+        $this->assertUniversitiesStaff($request);
         abort_unless($student->isStudent(), 404);
+
+        abort_unless(
+            $this->handoffs->documentsApproved($student),
+            422,
+            'Student Info has not approved all of this student\'s documents yet.',
+        );
 
         $validated = $request->validate([
             'university_id' => ['required', 'integer', Rule::exists('universities', 'id')],
@@ -61,6 +70,8 @@ class StudentUniversityController extends Controller
             '/student-universities',
         );
 
+        $this->handoffs->syncUniversities($student, $request->user());
+
         return UniversityResource::make($university)
             ->response()
             ->setStatusCode(201);
@@ -68,13 +79,24 @@ class StudentUniversityController extends Controller
 
     public function destroy(Request $request, User $student, University $university): JsonResponse
     {
-        abort_unless($request->user()?->isConsultant(), 403);
+        $this->assertUniversitiesStaff($request);
         abort_unless($student->isStudent(), 404);
 
         $student->assignedUniversities()->detach($university->id);
 
+        $this->handoffs->syncUniversities($student, $request->user());
+
         return response()->json([
             'message' => 'University removed from this student.',
         ]);
+    }
+
+    private function assertUniversitiesStaff(Request $request): void
+    {
+        abort_unless(
+            $request->user()?->canWorkInDepartment(StaffDepartment::Universities),
+            403,
+            'Only Universities staff can share university options.',
+        );
     }
 }

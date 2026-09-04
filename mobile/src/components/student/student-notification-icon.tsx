@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SymbolView } from 'expo-symbols';
+import { AppIcon } from '@/components/app-icon';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -100,17 +100,17 @@ export function StudentNotificationIcon() {
               borderColor: theme.border,
             },
           ]}>
-          <SymbolView name="bell.fill" size={20} tintColor={theme.text} type="hierarchical" />
+          <AppIcon name="bell.fill" size={20} tintColor={theme.text} />
           {unreadCount > 0 ? (
             <View
               style={[
                 styles.badge,
                 {
-                  backgroundColor: theme.text,
+                  backgroundColor: theme.primary,
                   borderColor: theme.backgroundElement,
                 },
               ]}>
-              <Text style={[styles.badgeText, { color: theme.background }]}>{badgeLabel}</Text>
+              <Text style={[styles.badgeText, { color: theme.onPrimary }]}>{badgeLabel}</Text>
             </View>
           ) : null}
         </Pressable>
@@ -175,7 +175,7 @@ function NotificationRow({
         styles.row,
         { backgroundColor: unread ? theme.backgroundSelected : theme.background },
       ]}>
-      <View style={[styles.dot, { backgroundColor: unread ? theme.text : theme.border }]} />
+      <View style={[styles.dot, { backgroundColor: unread ? theme.primary : theme.border }]} />
       <View style={styles.rowCopy}>
         <Text style={[styles.rowMessage, { color: theme.text }]}>{item.message}</Text>
         {item.created_at ? (

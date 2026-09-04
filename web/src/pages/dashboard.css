@@ -706,6 +706,12 @@ html[data-theme='dark'] .dash-activity-avatar.danger {
   font-weight: 600;
 }
 
+.profile-card-select .searchable-select-trigger {
+  min-height: 44px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 @media (max-width: 560px) {
   .profile-card-head {
     flex-direction: column;
@@ -1360,6 +1366,17 @@ html[data-theme='dark'] .chat-block-btn.unblock {
   cursor: not-allowed;
 }
 
+.handoff-lock {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-gold);
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .chat-blocked-banner {
   flex: 0 0 auto;
   margin: 0;
@@ -1756,14 +1773,20 @@ html[data-theme='dark'] .chat-block-btn.unblock {
 .page-back-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
+  /* Grid/flex parents would otherwise stretch it across the row. */
+  width: fit-content;
+  justify-self: start;
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--panel-muted);
   color: var(--ink);
+  font-family: inherit;
   font-weight: 600;
   font-size: 0.9rem;
+  text-align: left;
   text-decoration: none;
   cursor: pointer;
   transition:

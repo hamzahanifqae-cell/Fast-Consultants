@@ -39,6 +39,8 @@ type AuthSheetProps = {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Fill remaining screen height (needed when keyboard is open). */
+  fill?: boolean;
 };
 
 /** Top inset so the control’s mid sits in the fat part of the sin² bell. */
@@ -46,7 +48,13 @@ function notchContentTop(depth: number, contentHeight = 28) {
   return Math.max(0, Math.round(depth * 0.58 - contentHeight / 2));
 }
 
-export function AuthSheet({ children, label, onPress, disabled = false }: AuthSheetProps) {
+export function AuthSheet({
+  children,
+  label,
+  onPress,
+  disabled = false,
+  fill = false,
+}: AuthSheetProps) {
   const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -59,8 +67,13 @@ export function AuthSheet({ children, label, onPress, disabled = false }: AuthSh
   );
 
   return (
-    <View style={[styles.sheet, { backgroundColor: theme.backgroundElement, flexShrink: 1 }]}>
-      <View style={styles.sheetBody}>{children}</View>
+    <View
+      style={[
+        styles.sheet,
+        { backgroundColor: theme.backgroundElement },
+        fill ? styles.sheetFill : styles.sheetAuto,
+      ]}>
+      <View style={fill ? styles.sheetBodyFill : styles.sheetBodyAuto}>{children}</View>
 
       <View style={[styles.footer, { height: depth, width: screenWidth }]}>
         <Svg
@@ -158,9 +171,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     maxHeight: '100%',
   },
-  sheetBody: {
-    flexGrow: 1,
+  sheetAuto: {
+    flexGrow: 0,
     flexShrink: 1,
+  },
+  sheetFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  sheetBodyAuto: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  sheetBodyFill: {
+    flex: 1,
     minHeight: 0,
   },
   footer: {

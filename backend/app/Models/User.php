@@ -161,6 +161,20 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether the user may act on a department's own work. Super Admin and Admin
+     * span the whole organization; staff are limited to the departments they hold
+     * permissions for.
+     */
+    public function canWorkInDepartment(StaffDepartment $department): bool
+    {
+        if ($this->isSuperAdmin() || $this->isAdmin()) {
+            return true;
+        }
+
+        return $this->canAccessDepartment($department);
+    }
+
+    /**
      * @return list<StaffDepartment>
      */
     public function accessibleDepartments(): array

@@ -26,9 +26,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",
@@ -36,6 +40,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": false
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -47,12 +59,18 @@
       "expo-secure-store",
       "expo-sharing",
       "expo-font",
-      "expo-notifications",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-image"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "39de5643-0d0b-4fb6-8e13-63802bb8e5d9"
+      }
+    },
+    "owner": "abubakar-lodhi"
   }
 }

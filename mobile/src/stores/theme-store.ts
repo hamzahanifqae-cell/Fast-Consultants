@@ -24,8 +24,12 @@ export const useThemeStore = create<ThemeState>((set) => ({
   hydrated: false,
 
   hydrate: async () => {
-    const stored = await SecureStore.getItemAsync(THEME_KEY);
-    set({ preference: parsePreference(stored), hydrated: true });
+    try {
+      const stored = await SecureStore.getItemAsync(THEME_KEY);
+      set({ preference: parsePreference(stored), hydrated: true });
+    } catch {
+      set({ hydrated: true });
+    }
   },
 
   setPreference: async (preference) => {

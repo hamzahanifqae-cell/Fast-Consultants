@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+
 import {
   DMSans_400Regular,
   DMSans_500Medium,
@@ -7,18 +9,23 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { View } from 'react-native';
 
 import { PageLoader } from '@/components/page-loader';
+import { RootErrorBoundary } from '@/components/root-error-boundary';
 import { AppProviders } from '@/providers/app-providers';
-import { GlobalChatHost } from '@/components/global-chat-host';
 import { SaveFeedbackBar } from '@/components/save-feedback-bar';
 import { Colors, Brand } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/stores/auth-store';
 import { useStatusBarStore } from '@/stores/status-bar-store';
 import { useThemeStore } from '@/stores/theme-store';
+
+const GlobalChatHost = lazy(async () => {
+  const module = await import('@/components/global-chat-host');
+  return { default: module.GlobalChatHost };
+});
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,7 +37,7 @@ export default function RootLayout() {
   const hydrateTheme = useThemeStore((state) => state.hydrate);
   const themeHydrated = useThemeStore((state) => state.hydrated);
   const canvas = Colors[colorScheme].background;
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_700Bold,
@@ -42,17 +49,18 @@ export default function RootLayout() {
   }, [hydrate, hydrateTheme]);
 
   useEffect(() => {
-    if (hydrated && themeHydrated && fontsLoaded) {
+    if ((fontsLoaded || fontError) && hydrated && themeHydrated) {
       void SplashScreen.hideAsync();
     }
-  }, [hydrated, themeHydrated, fontsLoaded]);
+  }, [fontError, hydrated, themeHydrated, fontsLoaded]);
 
-  if (!fontsLoaded || !hydrated || !themeHydrated) {
+  if ((!fontsLoaded && !fontError) || !hydrated || !themeHydrated) {
     return <PageLoader fullScreen message="Starting Fast Consultants…" />;
   }
 
   return (
-    <AppProviders>
+    <RootErrorBoundary>
+      <AppProviders>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <View style={{ flex: 1, backgroundColor: canvas }}>
           <StatusBar style={statusBarOverride ?? (colorScheme === 'dark' ? 'light' : 'dark')} />
@@ -96,9 +104,12 @@ export default function RootLayout() {
           <Stack.Screen name="departments/team" />
           </Stack>
           <SaveFeedbackBar />
-          <GlobalChatHost />
+          <Suspense fallback={null}>
+            <GlobalChatHost />
+          </Suspense>
         </View>
       </ThemeProvider>
-    </AppProviders>
+      </AppProviders>
+    </RootErrorBoundary>
   );
 }

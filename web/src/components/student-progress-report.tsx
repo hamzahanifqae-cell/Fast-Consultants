@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { InlinePageLoader } from '@/components/app-loader';
 import { PageEmpty } from '@/components/page-fill';
+import { SearchableSelect } from '@/components/searchable-select';
 import {
   journeyProgressPalette,
   STUDENT_PROGRESS_SECTIONS,
@@ -10,6 +11,13 @@ import {
 } from '@/lib/student-progress';
 
 type ProgressFilter = 'all' | 'behind' | 'on_track' | 'complete';
+
+const PROGRESS_OPTIONS = [
+  { value: 'all', label: 'All progress' },
+  { value: 'behind', label: 'Behind (< 50%)' },
+  { value: 'on_track', label: 'On track (50 to 99%)' },
+  { value: 'complete', label: 'Complete (100%)' },
+];
 
 type Props = {
   students: StudentProgressRow[];
@@ -67,6 +75,19 @@ export function StudentProgressReport({
     });
   }, [students, statusFilter, progressFilter]);
 
+  const studentOptions = useMemo(
+    () => filtered.map((student) => ({ value: String(student.id), label: student.name })),
+    [filtered],
+  );
+
+  const stageOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All stages' },
+      ...statuses.map((status) => ({ value: status, label: status })),
+    ],
+    [statuses],
+  );
+
   useEffect(() => {
     if (filtered.length === 0) {
       setSelectedId(null);
@@ -115,44 +136,41 @@ export function StudentProgressReport({
       </div>
 
       <div className="student-progress-filters">
-        <label className="student-progress-control">
+        <div className="student-progress-control">
           <span>Student</span>
-          <select
-            value={selected?.id ?? ''}
-            onChange={(event) => setSelectedId(Number(event.target.value) || null)}
-            disabled={filtered.length === 0}>
-            {filtered.length === 0 ? <option value="">No students match</option> : null}
-            {filtered.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchableSelect
+            value={selected ? String(selected.id) : ''}
+            options={studentOptions}
+            placeholder={filtered.length === 0 ? 'No students match' : 'Select student'}
+            searchPlaceholder="Search student"
+            emptyMessage="No students match your search"
+            ariaLabel="Student"
+            disabled={filtered.length === 0}
+            onChange={(value) => setSelectedId(Number(value) || null)}
+          />
+        </div>
 
-        <label className="student-progress-control">
+        <div className="student-progress-control">
           <span>Stage</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="all">All stages</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchableSelect
+            value={statusFilter}
+            options={stageOptions}
+            searchable={false}
+            ariaLabel="Stage"
+            onChange={setStatusFilter}
+          />
+        </div>
 
-        <label className="student-progress-control">
+        <div className="student-progress-control">
           <span>Progress</span>
-          <select
+          <SearchableSelect
             value={progressFilter}
-            onChange={(event) => setProgressFilter(event.target.value as ProgressFilter)}>
-            <option value="all">All progress</option>
-            <option value="behind">Behind (&lt; 50%)</option>
-            <option value="on_track">On track (50 to 99%)</option>
-            <option value="complete">Complete (100%)</option>
-          </select>
-        </label>
+            options={PROGRESS_OPTIONS}
+            searchable={false}
+            ariaLabel="Progress"
+            onChange={(value) => setProgressFilter(value as ProgressFilter)}
+          />
+        </div>
       </div>
 
       {!selected ? (

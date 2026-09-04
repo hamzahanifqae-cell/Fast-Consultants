@@ -5,6 +5,7 @@ import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { PageStats } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
 import { prepareUploadFile } from '@/lib/prepare-upload-file';
@@ -34,6 +35,9 @@ export function ConsultantFinancePage() {
       return data.data;
     },
   });
+
+  const handoffQuery = useStudentHandoff(studentId);
+  const chargeLock = handoffLockMessage(handoffQuery.data, 'finance');
 
   const awaitingReview = useMemo(
     () => (receiptsQuery.data ?? []).filter((item) => item.status === 'awaiting_review'),
@@ -312,6 +316,7 @@ export function ConsultantFinancePage() {
 
           <section className="panel">
             <h2>Send charge slip</h2>
+            {chargeLock ? <p className="handoff-lock">{chargeLock}</p> : null}
             <form className="org-form" onSubmit={onSubmit}>
               <label className="field">
                 <span>Title</span>
@@ -341,7 +346,10 @@ export function ConsultantFinancePage() {
                   PDF, JPG, or PNG. Large images are compressed automatically.
                 </span>
               </label>
-              <button className="primary-btn" type="submit" disabled={createReceipt.isPending}>
+              <button
+                className="primary-btn"
+                type="submit"
+                disabled={createReceipt.isPending || Boolean(chargeLock)}>
                 {createReceipt.isPending ? 'Sending…' : 'Send to student'}
               </button>
             </form>

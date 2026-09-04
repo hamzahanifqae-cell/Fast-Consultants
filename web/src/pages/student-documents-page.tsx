@@ -1,27 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { InlinePageLoader } from '@/components/app-loader';
 import { PageEmpty, PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
 import { RejectionFeedback } from '@/components/rejection-feedback';
+import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { prepareUploadFile } from '@/lib/prepare-upload-file';
 import type { DocumentType, StudentDocument } from '@/types/auth';
 import './dashboard.css';
 
-const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
-  { value: 'passport', label: 'Passport' },
-  { value: 'cnic', label: 'CNIC' },
-  { value: 'metric', label: 'Metric (Matric)' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'transcript', label: 'Transcript' },
+const DOCUMENT_TYPES: { value: DocumentType; label: string; required?: boolean }[] = [
+  { value: 'passport', label: 'Passport', required: true },
+  { value: 'cnic', label: 'CNIC', required: true },
+  { value: 'metric', label: 'Metric (Matric)', required: true },
+  { value: 'intermediate', label: 'Intermediate', required: true },
+  { value: 'transcript', label: 'Transcript', required: true },
   { value: 'degree_certificate', label: 'Degree certificate' },
   { value: 'diploma', label: 'Diploma' },
   { value: 'english_test', label: 'IELTS score' },
   { value: 'recommendation_letter', label: 'Recommendation letter' },
   { value: 'other', label: 'Other' },
 ];
+
+/** Catch-all types may be uploaded more than once; everything else is one file per type. */
+const REPEATABLE_TYPES: DocumentType[] = ['other'];
 
 function canModifyDocument(document: StudentDocument) {
   return document.status === 'pending' || document.status === 'rejected';
@@ -55,6 +59,43 @@ export function StudentDocumentsPage() {
     };
   }, [docs]);
 
+  const uploadedByType = useMemo(() => {
+    const map = new Map<DocumentType, StudentDocument>();
+    docs.forEach((doc) => {
+      if (!map.has(doc.type)) map.set(doc.type, doc);
+    });
+    return map;
+  }, [docs]);
+
+  /** An uploaded type drops out of the list, so students edit that file instead of re-uploading. */
+  const typeOptions = useMemo(
+    () =>
+      DOCUMENT_TYPES.filter(
+        (item) =>
+          item.value === editingDoc?.type ||
+          REPEATABLE_TYPES.includes(item.value) ||
+          !uploadedByType.has(item.value),
+      ).map((item) => ({
+        value: item.value,
+        label: item.required ? `${item.label} *` : item.label,
+      })),
+    [uploadedByType, editingDoc],
+  );
+
+  const uploadedTypeLabels = useMemo(
+    () =>
+      DOCUMENT_TYPES.filter(
+        (item) => !REPEATABLE_TYPES.includes(item.value) && uploadedByType.has(item.value),
+      ).map((item) => item.label),
+    [uploadedByType],
+  );
+
+  useEffect(() => {
+    if (editingId) return;
+    if (typeOptions.some((option) => option.value === type)) return;
+    setType((typeOptions[0]?.value as DocumentType) ?? 'other');
+  }, [typeOptions, type, editingId]);
+
   const documentsProgress = useMemo(() => {
     if (counts.total === 0) {
       return {
@@ -86,7 +127,7 @@ export function StudentDocumentsPage() {
 
   function resetForm() {
     setEditingId(null);
-    setType('passport');
+    setType((typeOptions[0]?.value as DocumentType) ?? 'other');
     setTitle('');
     setFile(null);
     if (fileInputRef.current) {
@@ -160,6 +201,13 @@ export function StudentDocumentsPage() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const alreadyUploaded = uploadedByType.get(type);
+    if (!editingId && alreadyUploaded && !REPEATABLE_TYPES.includes(type)) {
+      setError(
+        `${alreadyUploaded.type_label} is already uploaded. Edit that file below if it was rejected.`,
+      );
+      return;
+    }
     if (!editingId && !file) {
       setError('Choose a file to upload.');
       return;
@@ -198,15 +246,21 @@ export function StudentDocumentsPage() {
               <form className="org-form" onSubmit={onSubmit}>
                 <label className="field">
                   <span>Type</span>
-                  <select
+                  <SearchableSelect
                     value={type}
-                    onChange={(event) => setType(event.target.value as DocumentType)}>
-                    {DOCUMENT_TYPES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={typeOptions}
+                    searchable={false}
+                    ariaLabel="Document type"
+                    onChange={(value) => setType(value as DocumentType)}
+                  />
+                  {!editingId && uploadedTypeLabels.length ? (
+                    <span
+                      className="muted"
+                      style={{ marginTop: 6, display: 'block', fontSize: '0.85rem' }}>
+                      Already uploaded: {uploadedTypeLabels.join(', ')}. Use Edit below to replace a
+                      rejected file.
+                    </span>
+                  ) : null}
                 </label>
                 <label className="field">
                   <span>Title (optional)</span>
@@ -264,6 +318,7 @@ export function StudentDocumentsPage() {
             <PageTips
               title="Upload tips"
               items={[
+                'Each document type is uploaded once. Fix a rejected file with Edit instead of uploading again.',
                 'Pending and rejected documents can be edited or deleted.',
                 'Approved files stay locked after staff review.',
                 'Large photos are compressed automatically before upload.',

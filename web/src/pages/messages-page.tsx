@@ -586,8 +586,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     onClick={() => {
                       const confirmed = window.confirm(
                         isBlocked
-                          ? 'Unblock this student so they can message again?'
-                          : 'Block this student from sending chat messages?',
+                          ? 'Unblock this student so they can message this department again?'
+                          : 'Block this student from messaging this department? Other departments stay open.',
                       );
                       if (!confirmed) return;
                       toggleBlock.mutate(isBlocked);
@@ -599,8 +599,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
               {isBlocked ? (
                 <p className="chat-blocked-banner">
                   {isConsultant
-                    ? 'This student is blocked from sending messages. You can still message them.'
-                    : 'Chat is blocked by staff. You can still read past messages.'}
+                    ? 'This student is blocked from messaging this department. You can still message them.'
+                    : 'This department blocked you from sending messages. You can still read past messages and message other departments.'}
                 </p>
               ) : null}
               <div className="chat-messages">

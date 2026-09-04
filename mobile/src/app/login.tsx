@@ -1,8 +1,6 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -13,9 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { PastelBlobs } from '@/components/pastel-blobs';
 import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
 import { AuthSheet } from '@/components/scoop-chrome';
@@ -23,6 +19,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { Brand } from '@/constants/theme';
+import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { type LoginPortal, portalMatchesUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
@@ -51,22 +48,12 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardInset = useKeyboardBottomInset();
+  const keyboardVisible = keyboardInset > 0;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
   const topInset = Math.max(insets.top, androidStatusBar);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const inputStyle = useMemo(
     () => ({
@@ -108,12 +95,8 @@ export default function LoginScreen() {
   return (
     <View style={styles.screen}>
       <AuthBackground />
-      <PastelBlobs />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        style={styles.avoider}>
+      <View style={styles.avoider}>
         <SafeAreaView
           style={[
             styles.hero,
@@ -131,7 +114,7 @@ export default function LoginScreen() {
 
           {!keyboardVisible ? (
             <View style={styles.heroBottom}>
-              <Animated.View entering={FadeIn.duration(450)} style={styles.brandBlock}>
+              <View style={styles.brandBlock}>
                 <BrandLogo size={56} />
                 <Text style={styles.roleTag}>{label}</Text>
                 <Text style={styles.brand}>Fast Consultants</Text>
@@ -142,89 +125,96 @@ export default function LoginScreen() {
                       ? 'Super Admin sign in only.'
                       : 'Staff and Admin sign in only.'}
                 </Text>
-              </Animated.View>
+              </View>
             </View>
           ) : null}
         </SafeAreaView>
 
-        <AuthSheet
-          disabled={submitting}
-          label={submitting ? 'Signing in…' : 'Sign In'}
-          onPress={() => void onSubmit()}>
-          <ScrollView
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            style={styles.formScroll}
-            contentContainerStyle={[
-              styles.form,
-              keyboardVisible && styles.formKeyboardOpen,
-            ]}>
-            <ThemeToggle />
-            <View style={styles.signUpBlock}>
-              {isStudent ? (
-                <>
+        <View
+          style={[
+            { marginBottom: keyboardInset },
+            keyboardVisible && styles.sheetLift,
+          ]}>
+          <AuthSheet
+            fill={keyboardVisible}
+            disabled={submitting}
+            label={submitting ? 'Signing in…' : 'Sign In'}
+            onPress={() => void onSubmit()}>
+            <ScrollView
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              style={keyboardVisible ? styles.formScrollFill : styles.formScrollAuto}
+              contentContainerStyle={[
+                styles.form,
+                keyboardVisible && styles.formKeyboardOpen,
+              ]}>
+              {!keyboardVisible ? <ThemeToggle /> : null}
+              <View style={styles.signUpBlock}>
+                {isStudent ? (
+                  <>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.signUpHint}>
+                      Don’t have an account?
+                    </ThemedText>
+                    <Link href={{ pathname: '/register', params: { role: 'student' } }} asChild>
+                      <Pressable>
+                        <ThemedText type="linkPrimary">Create account</ThemedText>
+                      </Pressable>
+                    </Link>
+                  </>
+                ) : (
                   <ThemedText type="small" themeColor="textSecondary" style={styles.signUpHint}>
-                    Don’t have an account?
+                    Accounts are created by Super Admin. Use the matching portal for your role.
                   </ThemedText>
-                  <Link href={{ pathname: '/register', params: { role: 'student' } }} asChild>
-                    <Pressable>
-                      <ThemedText type="linkPrimary">Create account</ThemedText>
-                    </Pressable>
-                  </Link>
-                </>
-              ) : (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.signUpHint}>
-                  Accounts are created by Super Admin. Use the matching portal for your role.
-                </ThemedText>
-              )}
-            </View>
+                )}
+              </View>
 
-            <TextInput
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.emailInput, inputStyle]}
-              value={email}
-            />
-
-            <View style={styles.passwordWrap}>
               <TextInput
                 autoCapitalize="none"
-                onChangeText={setPassword}
-                placeholder="Password"
+                autoComplete="email"
+                keyboardType="email-address"
+                onChangeText={setEmail}
+                placeholder="Email"
                 placeholderTextColor={theme.textSecondary}
-                secureTextEntry={!showPassword}
-                style={[styles.passwordInput, inputStyle]}
-                value={password}
+                style={[styles.emailInput, inputStyle]}
+                value={email}
               />
-              <Pressable
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                hitSlop={8}
-                onPress={() => setShowPassword((value) => !value)}
-                style={styles.eye}>
-                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
-                  {showPassword ? 'Hide' : 'Show'}
-                </Text>
-              </Pressable>
-            </View>
 
-            {error ? (
-              <ThemedText type="small" themeColor="danger" style={styles.error}>
-                {error}
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  autoCapitalize="none"
+                  onChangeText={setPassword}
+                  placeholder="Password"
+                  placeholderTextColor={theme.textSecondary}
+                  secureTextEntry={!showPassword}
+                  style={[styles.passwordInput, inputStyle]}
+                  value={password}
+                />
+                <Pressable
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  hitSlop={8}
+                  onPress={() => setShowPassword((value) => !value)}
+                  style={styles.eye}>
+                  <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                    {showPassword ? 'Hide' : 'Show'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {error ? (
+                <ThemedText type="small" themeColor="danger" style={styles.error}>
+                  {error}
+                </ThemedText>
+              ) : null}
+
+              <ThemedText type="link" style={styles.forgot}>
+                Forgot password?
               </ThemedText>
-            ) : null}
-
-            <ThemedText type="link" style={styles.forgot}>
-              Forgot password?
-            </ThemedText>
-          </ScrollView>
-        </AuthSheet>
-      </KeyboardAvoidingView>
+            </ScrollView>
+          </AuthSheet>
+        </View>
+      </View>
     </View>
   );
 }
@@ -236,6 +226,11 @@ const styles = StyleSheet.create({
   },
   avoider: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetLift: {
+    flex: 1,
+    minHeight: 0,
     justifyContent: 'flex-end',
   },
   hero: {
@@ -296,12 +291,16 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 14,
   },
-  formScroll: {
+  formScrollAuto: {
     flexGrow: 0,
+  },
+  formScrollFill: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   formKeyboardOpen: {
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 4,
   },
   signUpBlock: {
     alignItems: 'center',

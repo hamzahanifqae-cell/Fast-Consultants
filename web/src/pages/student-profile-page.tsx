@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
+import { PageBackButton } from '@/components/page-back-button';
 import { PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
@@ -61,6 +62,20 @@ const emptyForm: ProfileForm = {
 const CNIC_PATTERN = /^[0-9]{5}-?[0-9]{7}-?[0-9]$/;
 
 const EDUCATION_LEVELS = ['Matric', 'Intermediate', "Bachelor's", 'Diploma'] as const;
+
+const SECTION_OPTIONS = [
+  { value: 'personal', label: 'Personal information' },
+  { value: 'education', label: 'Education information' },
+  { value: 'job', label: 'Job information' },
+  { value: 'other', label: 'Other' },
+];
+
+const GENDER_OPTIONS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
 
 type EducationLevel = (typeof EDUCATION_LEVELS)[number];
 
@@ -147,6 +162,21 @@ function sectionLabel(section: ProfileSection): string {
   if (section === 'job') return 'job';
   if (section === 'other') return 'other';
   return 'personal';
+}
+
+function sectionPageTitle(section: ProfileSection): string {
+  if (section === 'education') return 'Education information';
+  if (section === 'job') return 'Job information';
+  if (section === 'other') return 'Other information';
+  return 'Personal information';
+}
+
+/** Sections read as a wizard, so back steps to the section before it. */
+function previousSection(section: ProfileSection): ProfileSection | null {
+  if (section === 'education') return 'personal';
+  if (section === 'job') return 'education';
+  if (section === 'other') return 'job';
+  return null;
 }
 
 function sectionProgress(form: ProfileForm, section: ProfileSection) {
@@ -322,6 +352,17 @@ export function StudentProfilePage() {
     [nationalityOptions],
   );
 
+  const educationLevelOptions = useMemo(() => {
+    const base = EDUCATION_LEVELS.map((level) => ({ value: level, label: level }));
+    if (
+      form.education_level &&
+      !EDUCATION_LEVELS.includes(form.education_level as EducationLevel)
+    ) {
+      return [...base, { value: form.education_level, label: form.education_level }];
+    }
+    return base;
+  }, [form.education_level]);
+
   const countrySelectOptions = useMemo(() => {
     const base = COUNTRIES.map((country) => ({
       value: country.name,
@@ -496,11 +537,19 @@ export function StudentProfilePage() {
     saveProfile.mutate(form);
   }
 
+  const backSection = previousSection(activeSection);
+
   return (
-    <AppShell
-      badge="Student"
-      title="Personal information">
+    <AppShell badge="Student" title={sectionPageTitle(activeSection)}>
       <div className="page-stack">
+        {backSection ? (
+          <PageBackButton
+            label={`Back to ${sectionPageTitle(backSection).toLowerCase()}`}
+            onClick={() => onSectionChange(backSection)}
+          />
+        ) : (
+          <PageBackButton to={StudentRoutes.home} label="Back to dashboard" />
+        )}
         <SectionProgress
           loading={profileQuery.isLoading}
           title={
@@ -516,18 +565,15 @@ export function StudentProfilePage() {
             <section className="panel">
               <div className="profile-card-head">
                 <h2>Edit your details</h2>
-                <label className="profile-card-select">
-                  <span className="sr-only">Information type</span>
-                  <select
+                <div className="profile-card-select">
+                  <SearchableSelect
                     value={activeSection}
-                    onChange={(event) => onSectionChange(event.target.value as ProfileSection)}
-                    aria-label="Information type">
-                    <option value="personal">Personal information</option>
-                    <option value="education">Education information</option>
-                    <option value="job">Job information</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
+                    options={SECTION_OPTIONS}
+                    searchable={false}
+                    ariaLabel="Information type"
+                    onChange={(value) => onSectionChange(value as ProfileSection)}
+                  />
+                </div>
               </div>
               <p className="muted">
                 {activeSection === 'personal'
@@ -595,16 +641,13 @@ export function StudentProfilePage() {
                   <span>
                     Gender <span className="req">*</span>
                   </span>
-                  <select
+                  <SearchableSelect
                     value={form.gender}
-                    onChange={(event) => updateField('gender', event.target.value)}
-                    required>
-                    <option value="">Select</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                    <option value="prefer_not_to_say">Prefer not to say</option>
-                  </select>
+                    options={GENDER_OPTIONS}
+                    placeholder="Select"
+                    searchable={false}
+                    onChange={(value) => updateField('gender', value)}
+                  />
                 </label>
 
                 <label className="field">
@@ -786,21 +829,13 @@ export function StudentProfilePage() {
                       <span>
                         Education level <span className="req">*</span>
                       </span>
-                      <select
+                      <SearchableSelect
                         value={form.education_level}
-                        onChange={(event) => updateField('education_level', event.target.value)}
-                        required>
-                        <option value="">Select</option>
-                        {EDUCATION_LEVELS.map((level) => (
-                          <option key={level} value={level}>
-                            {level}
-                          </option>
-                        ))}
-                        {form.education_level &&
-                        !EDUCATION_LEVELS.includes(form.education_level as EducationLevel) ? (
-                          <option value={form.education_level}>{form.education_level}</option>
-                        ) : null}
-                      </select>
+                        options={educationLevelOptions}
+                        placeholder="Select"
+                        searchable={false}
+                        onChange={(value) => updateField('education_level', value)}
+                      />
                     </label>
                     <label className="field">
                       <span>
@@ -960,10 +995,6 @@ export function StudentProfilePage() {
                     : 'Save changes'}
                 </button>
               </form>
-
-              <p style={{ marginTop: 16 }}>
-                <Link to={StudentRoutes.home}>← Back to dashboard</Link>
-              </p>
             </section>
           }
           side={

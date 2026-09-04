@@ -47,10 +47,11 @@ export function StudentScreen({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
+  // Keep header clear of the status bar, then add a little breathing room.
   const topPadding =
     Platform.OS === 'android'
-      ? Math.max(insets.top, androidStatusBar) + Spacing.two
-      : Spacing.two;
+      ? Math.max(insets.top, androidStatusBar) + Spacing.three
+      : Spacing.three;
 
   const header = (
     <View style={[styles.topBar, { paddingTop: topPadding }]}>
@@ -70,12 +71,14 @@ export function StudentScreen({
 
       {!showBack ? (
         <View style={styles.headerBrandCenter} pointerEvents="none">
-          <BrandLogo size={36} style={styles.headerLogo} />
+          <BrandLogo size={32} style={styles.headerLogo} />
           <ThemedText type="heading" style={styles.headerBrand} numberOfLines={1}>
             Fast Consultants
           </ThemedText>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.headerBrandCenter} />
+      )}
 
       <View style={styles.topBarSide}>
         {notifications ? <StudentNotificationIcon /> : <View style={styles.circleBtn} />}
@@ -150,32 +153,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
-    position: 'relative',
     paddingHorizontal: Spacing.four,
-    paddingBottom: 8,
+    paddingBottom: Spacing.two,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 44,
   },
   topBarSide: {
     width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
   },
   headerBrandCenter: {
-    position: 'absolute',
-    left: Spacing.four,
-    right: Spacing.four,
+    flex: 1,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
+    paddingHorizontal: Spacing.two,
   },
   headerBrand: {
     flexShrink: 1,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 18,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   headerLogo: {
     flexShrink: 0,

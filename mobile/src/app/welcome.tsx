@@ -1,9 +1,7 @@
 import { Redirect, router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { PastelBlobs } from '@/components/pastel-blobs';
 import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -57,46 +55,40 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.screen}>
       <AuthBackground />
-      <PastelBlobs />
 
       <SafeAreaView style={styles.hero} edges={['top']}>
-        <Animated.View entering={FadeIn.duration(450)} style={styles.brandBlock}>
+        <View style={styles.brandBlock}>
           <BrandLogo size={64} />
           <Text style={styles.brand}>Fast Consultants</Text>
           <Text style={styles.heroSub}>Choose your portal. Each login accepts only that role.</Text>
-        </Animated.View>
+        </View>
       </SafeAreaView>
 
       <View style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
         <ThemeToggle />
         <Text style={[styles.sheetHint, { color: theme.textSecondary }]}>I am a…</Text>
 
-        {ROLES.map((role, index) => (
-          <Animated.View
+        {ROLES.map((role) => (
+          <Pressable
             key={role.type}
-            entering={FadeInDown.delay(80 + index * 70)
-              .springify()
-              .damping(16)}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => openRole(role.type)}
-              style={({ pressed }) => [
-                styles.roleCard,
-                { backgroundColor: theme.inputFill },
-                pressed && styles.roleCardPressed,
-              ]}>
-              <View style={[styles.roleAvatar, { backgroundColor: role.tint }]}>
-                <Text style={styles.roleEmoji}>{role.emoji}</Text>
-              </View>
-              <View style={styles.roleCopy}>
-                <Text style={[styles.roleTitle, { color: theme.text }]}>{role.title}</Text>
-                <Text style={[styles.roleSubtitle, { color: theme.textSecondary }]}>
-                  {role.subtitle}
-                </Text>
-              </View>
-              <Text style={[styles.roleChevron, { color: theme.textSecondary }]}>›</Text>
-            </Pressable>
-          </Animated.View>
+            accessibilityRole="button"
+            onPress={() => openRole(role.type)}
+            style={({ pressed }) => [
+              styles.roleCard,
+              { backgroundColor: theme.inputFill },
+              pressed && styles.roleCardPressed,
+            ]}>
+            <View style={[styles.roleAvatar, { backgroundColor: role.tint }]}>
+              <Text style={styles.roleEmoji}>{role.emoji}</Text>
+            </View>
+            <View style={styles.roleCopy}>
+              <Text style={[styles.roleTitle, { color: theme.text }]}>{role.title}</Text>
+              <Text style={[styles.roleSubtitle, { color: theme.textSecondary }]}>
+                {role.subtitle}
+              </Text>
+            </View>
+            <Text style={[styles.roleChevron, { color: theme.textSecondary }]}>›</Text>
+          </Pressable>
         ))}
       </View>
     </View>

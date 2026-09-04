@@ -357,8 +357,10 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
                   </ThemedText>
                 </View>
                 {(conversation.unread_count ?? 0) > 0 ? (
-                  <View style={[styles.unreadPill, { backgroundColor: theme.warningMuted }]}>
-                    <ThemedText type="caption">{conversation.unread_count}</ThemedText>
+                  <View style={[styles.unreadPill, { backgroundColor: theme.primary }]}>
+                    <ThemedText type="caption" style={{ color: theme.onPrimary, fontWeight: '800' }}>
+                      {conversation.unread_count}
+                    </ThemedText>
                   </View>
                 ) : null}
               </Pressable>

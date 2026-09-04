@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SymbolView } from 'expo-symbols';
+import { AppIcon } from '@/components/app-icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -448,8 +448,8 @@ export function ChatPanel({
     Alert.alert(
       currentlyBlocked ? 'Unblock student chat?' : 'Block student chat?',
       currentlyBlocked
-        ? 'They will be able to send messages again.'
-        : 'This student will not be able to send chat messages. You can still message them.',
+        ? 'They will be able to message this department again.'
+        : 'This student will not be able to message this department. Other departments stay open, and you can still message them.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -571,12 +571,7 @@ export function ChatPanel({
                     styles.headerIconButton,
                     pressed && styles.headerIconButtonPressed,
                   ]}>
-                  <SymbolView
-                    name="chevron.left"
-                    size={14}
-                    tintColor={headerIconTint}
-                    weight="semibold"
-                  />
+                  <AppIcon name="chevron.left" size={14} tintColor={headerIconTint} />
                 </Pressable>
               ) : null}
               <Pressable
@@ -588,12 +583,7 @@ export function ChatPanel({
                   styles.headerIconButton,
                   pressed && styles.headerIconButtonPressed,
                 ]}>
-                <SymbolView
-                  name="chevron.down"
-                  size={13}
-                  tintColor={headerIconTint}
-                  weight="semibold"
-                />
+                <AppIcon name="chevron.down" size={13} tintColor={headerIconTint} />
               </Pressable>
             </View>
           </View>
@@ -869,14 +859,15 @@ export function ChatPanel({
                     <Text style={styles.studentBannerTitle}>{departmentLabel}</Text>
                     <Text style={styles.studentBannerEmail}>
                       {isBlocked
-                        ? 'Chat is blocked by staff. You can still read past messages.'
+                        ? 'This department blocked you from sending messages. You can still read past messages and message other departments.'
                         : 'Only this department can see this conversation.'}
                     </Text>
                   </View>
                 ) : !isConsultant && isBlocked ? (
                   <View style={styles.studentBanner}>
                     <Text style={styles.blockedBannerText}>
-                      Chat is blocked by staff. You can still read past messages.
+                      This department blocked you from sending messages. You can still read past
+                      messages and message other departments.
                     </Text>
                   </View>
                 ) : null}
@@ -948,7 +939,7 @@ export function ChatPanel({
                             : 1,
                       },
                     ]}>
-                    <SymbolView name="paperplane.fill" size={16} tintColor="#ffffff" />
+                    <AppIcon name="paperplane.fill" size={16} tintColor="#ffffff" />
                   </Pressable>
                 </View>
               </View>
@@ -1214,7 +1205,7 @@ function createChatStyles(
     fontWeight: '700',
   },
   unreadBadge: {
-    backgroundColor: theme.inverted,
+    backgroundColor: theme.primary,
     borderRadius: 999,
     minWidth: 22,
     paddingHorizontal: 7,
@@ -1222,7 +1213,7 @@ function createChatStyles(
     alignItems: 'center',
   },
   unreadBadgeText: {
-    color: theme.invertedText,
+    color: theme.onPrimary,
     fontSize: 11,
     fontWeight: '700',
   },

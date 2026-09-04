@@ -156,8 +156,8 @@ export function LiquidMenu({ visible, onClose, items, onLogout }: LiquidMenuProp
                     <ThemedText type="smallBold">{item.label}</ThemedText>
                   </View>
                   {(item.badge ?? 0) > 0 ? (
-                    <View style={[styles.itemBadge, { backgroundColor: theme.dangerMuted }]}>
-                      <ThemedText type="caption" style={{ color: theme.danger, fontWeight: '800' }}>
+                    <View style={[styles.itemBadge, { backgroundColor: theme.primary }]}>
+                      <ThemedText type="caption" style={{ color: theme.onPrimary, fontWeight: '800' }}>
                         {item.badge! > 99 ? '99+' : item.badge}
                       </ThemedText>
                     </View>

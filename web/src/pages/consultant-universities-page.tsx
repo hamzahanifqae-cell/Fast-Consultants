@@ -3,8 +3,10 @@ import { type FormEvent, useMemo, useState } from 'react';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { PageStats, PageTips } from '@/components/page-fill';
+import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import type { DocumentType, University } from '@/types/auth';
 import './dashboard.css';
@@ -54,6 +56,9 @@ export function ConsultantUniversitiesPage() {
     },
   });
 
+  const handoffQuery = useStudentHandoff(studentId);
+  const shareLock = handoffLockMessage(handoffQuery.data, 'universities');
+
   const assignedIds = useMemo(
     () => new Set((assignedQuery.data ?? []).map((item) => item.id)),
     [assignedQuery.data],
@@ -62,6 +67,14 @@ export function ConsultantUniversitiesPage() {
   const availableToAssign = useMemo(
     () => (catalogQuery.data ?? []).filter((item) => !assignedIds.has(item.id)),
     [catalogQuery.data, assignedIds],
+  );
+  const assignOptions = useMemo(
+    () =>
+      availableToAssign.map((university) => ({
+        value: String(university.id),
+        label: university.name,
+      })),
+    [availableToAssign],
   );
   const directoryCount = studentsQuery.data?.length ?? 0;
 
@@ -219,16 +232,17 @@ export function ConsultantUniversitiesPage() {
 
             <form className="org-form" onSubmit={onAssign} style={{ marginTop: 18 }}>
               <h2>Share a university</h2>
+              {shareLock ? <p className="handoff-lock">{shareLock}</p> : null}
               <label className="field">
                 <span>From catalog</span>
-                <select value={assignId} onChange={(event) => setAssignId(event.target.value)} required>
-                  <option value="">Select university</option>
-                  {availableToAssign.map((university) => (
-                    <option key={university.id} value={university.id}>
-                      {university.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  value={assignId}
+                  options={assignOptions}
+                  placeholder="Select university"
+                  searchPlaceholder="Search university"
+                  emptyMessage="No universities match your search"
+                  onChange={setAssignId}
+                />
               </label>
               <label className="field">
                 <span>Note for student (optional)</span>
@@ -238,7 +252,10 @@ export function ConsultantUniversitiesPage() {
                   placeholder="Why this option fits…"
                 />
               </label>
-              <button className="primary-btn" type="submit" disabled={assignUniversity.isPending}>
+              <button
+                className="primary-btn"
+                type="submit"
+                disabled={assignUniversity.isPending || Boolean(shareLock)}>
                 Share with student
               </button>
             </form>

@@ -213,12 +213,20 @@ export type ApplicationChecklistItem = {
   total: number;
 };
 
+/** Which department in the chain may start work on this student. */
+export type ApplicationHandoff = {
+  documents_approved: boolean;
+  universities_shared: boolean;
+  fees_cleared: boolean;
+};
+
 export type ApplicationStatusResponse = {
   application: StudentApplication;
   checklist: {
     documents: ApplicationChecklistItem;
     charge_receipts: ApplicationChecklistItem;
   };
+  handoff: ApplicationHandoff;
   preparation_available: boolean;
   interview_available: boolean;
   current_status: string;

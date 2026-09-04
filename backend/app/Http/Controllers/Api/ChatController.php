@@ -99,14 +99,17 @@ class ChatController extends Controller
                 ->pluck('aggregate', 'conversation_id');
         }
 
-        $blockedStudentIds = ChatStudentBlock::query()
+        $blockKeys = ChatStudentBlock::query()
             ->whereIn('student_id', $conversations->pluck('student_id')->unique()->filter())
-            ->pluck('student_id')
+            ->get(['student_id', 'department'])
+            ->map(fn (ChatStudentBlock $block) => $this->blockKey((int) $block->student_id, $block->department))
             ->flip();
 
-        $payload = $conversations->map(function (ChatConversation $conversation) use ($user, $unreadByConversation, $blockedStudentIds) {
+        $payload = $conversations->map(function (ChatConversation $conversation) use ($user, $unreadByConversation, $blockKeys) {
             $conversation->unread_count = (int) ($unreadByConversation[$conversation->id] ?? 0);
-            $conversation->is_blocked = $blockedStudentIds->has($conversation->student_id);
+            $conversation->is_blocked = $blockKeys->has(
+                $this->blockKey($conversation->student_id, $conversation->department)
+            );
 
             return $this->conversationPayload($conversation, $user);
         });
@@ -120,9 +123,9 @@ class ChatController extends Controller
     public function start(StartChatRequest $request): JsonResponse
     {
         $student = $request->user();
-        $this->ensureStudentNotBlocked($student->id);
 
         $department = $request->enum('department', StaffDepartment::class);
+        $this->ensureStudentNotBlocked($student->id, $department);
 
         $conversation = ChatConversation::query()->firstOrCreate(
             [
@@ -144,7 +147,7 @@ class ChatController extends Controller
             'messages.sender:id,name',
         ]);
         $conversation->unread_count = 0;
-        $conversation->is_blocked = $this->isStudentBlocked($student->id);
+        $conversation->is_blocked = $this->isStudentBlocked($student->id, $conversation->department);
 
         return response()->json([
             'data' => [
@@ -169,7 +172,10 @@ class ChatController extends Controller
             'messages.sender:id,name',
         ]);
         $conversation->unread_count = 0;
-        $conversation->is_blocked = $this->isStudentBlocked($conversation->student_id);
+        $conversation->is_blocked = $this->isStudentBlocked(
+            $conversation->student_id,
+            $conversation->department,
+        );
 
         return response()->json([
             'data' => [
@@ -187,7 +193,7 @@ class ChatController extends Controller
         $this->ensureCanAccess($request, $conversation);
 
         $viewer = $request->user();
-        if ($viewer->isStudent() && $this->isStudentBlocked($viewer->id)) {
+        if ($viewer->isStudent() && $this->isStudentBlocked($viewer->id, $conversation->department)) {
             return response()->json([
                 'data' => [
                     'typing' => false,
@@ -210,7 +216,7 @@ class ChatController extends Controller
 
         $viewer = $request->user();
         if ($viewer->isStudent()) {
-            $this->ensureStudentNotBlocked($viewer->id);
+            $this->ensureStudentNotBlocked($viewer->id, $conversation->department);
         }
 
         $message = $this->storeMessage(
@@ -228,7 +234,10 @@ class ChatController extends Controller
             'latestMessage.sender:id,name',
         ]);
         $conversation->unread_count = 0;
-        $conversation->is_blocked = $this->isStudentBlocked($conversation->student_id);
+        $conversation->is_blocked = $this->isStudentBlocked(
+            $conversation->student_id,
+            $conversation->department,
+        );
 
         return response()->json([
             'data' => [
@@ -245,7 +254,10 @@ class ChatController extends Controller
         abort_unless($staff->isConsultant(), 403);
 
         ChatStudentBlock::query()->updateOrCreate(
-            ['student_id' => $conversation->student_id],
+            [
+                'student_id' => $conversation->student_id,
+                'department' => $conversation->department,
+            ],
             [
                 'blocked_by' => $staff->id,
                 'blocked_at' => now(),
@@ -255,10 +267,14 @@ class ChatController extends Controller
         $conversation->loadMissing('student');
 
         if ($conversation->student) {
+            $scope = $conversation->department
+                ? "chat access to {$conversation->department->label()}"
+                : 'chat access';
+
             $this->notifications->createForUser(
                 $conversation->student,
                 $staff,
-                'Your chat access has been blocked by staff. You can still read past messages.',
+                "Your {$scope} has been blocked by staff. You can still read past messages.",
                 'chat_blocked',
                 'chat',
                 $conversation->id,
@@ -285,15 +301,19 @@ class ChatController extends Controller
         $staff = $request->user();
         abort_unless($staff->isConsultant(), 403);
 
-        ChatStudentBlock::query()
-            ->where('student_id', $conversation->student_id)
-            ->delete();
+        $this->blockQuery($conversation->student_id, $conversation->department)->delete();
+
+        $conversation->loadMissing('student');
 
         if ($conversation->student) {
+            $scope = $conversation->department
+                ? "chat access to {$conversation->department->label()}"
+                : 'chat access';
+
             $this->notifications->createForUser(
                 $conversation->student,
                 $staff,
-                'Your chat access has been restored. You can message departments again.',
+                "Your {$scope} has been restored. You can send messages again.",
                 'chat_unblocked',
                 'chat',
                 $conversation->id,
@@ -519,22 +539,47 @@ class ChatController extends Controller
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'other_user_typing' => $this->isPeerTyping($conversation->id, $viewer->id),
             'unread_count' => (int) ($conversation->unread_count ?? 0),
-            'is_blocked' => (bool) ($conversation->is_blocked ?? $this->isStudentBlocked($conversation->student_id)),
+            'is_blocked' => (bool) (
+                $conversation->is_blocked
+                ?? $this->isStudentBlocked($conversation->student_id, $conversation->department)
+            ),
         ];
     }
 
-    private function isStudentBlocked(int $studentId): bool
+    /** Blocks are per department, so a block from one department leaves the others open. */
+    private function isStudentBlocked(int $studentId, ?StaffDepartment $department): bool
     {
-        return ChatStudentBlock::query()->where('student_id', $studentId)->exists();
+        return $this->blockQuery($studentId, $department)->exists();
     }
 
-    private function ensureStudentNotBlocked(int $studentId): void
+    private function ensureStudentNotBlocked(int $studentId, ?StaffDepartment $department): void
     {
         abort_if(
-            $this->isStudentBlocked($studentId),
+            $this->isStudentBlocked($studentId, $department),
             403,
-            'Your chat access has been blocked by staff.',
+            $department
+                ? "Your chat access to {$department->label()} has been blocked by staff."
+                : 'Your chat access has been blocked by staff.',
         );
+    }
+
+    /**
+     * @return Builder<ChatStudentBlock>
+     */
+    private function blockQuery(int $studentId, ?StaffDepartment $department): Builder
+    {
+        return ChatStudentBlock::query()
+            ->where('student_id', $studentId)
+            ->when(
+                $department,
+                fn (Builder $query) => $query->where('department', $department->value),
+                fn (Builder $query) => $query->whereNull('department'),
+            );
+    }
+
+    private function blockKey(int $studentId, ?StaffDepartment $department): string
+    {
+        return $studentId.'|'.($department?->value ?? '');
     }
 
     private function setTyping(int $conversationId, int $userId, bool $typing): void

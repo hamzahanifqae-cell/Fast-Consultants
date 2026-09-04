@@ -10,6 +10,7 @@ use App\Http\Requests\Api\StoreStudentDocumentRequest;
 use App\Http\Requests\Api\UpdateStudentDocumentRequest;
 use App\Http\Resources\StudentDocumentResource;
 use App\Models\StudentDocument;
+use App\Services\DepartmentHandoffService;
 use App\Services\StudentNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class StudentDocumentController extends Controller
 {
     public function __construct(
         private readonly StudentNotificationService $notifications,
+        private readonly DepartmentHandoffService $handoffs,
     ) {
     }
     public function index(Request $request): AnonymousResourceCollection
@@ -37,6 +39,12 @@ class StudentDocumentController extends Controller
     {
         $type = $request->enum('type', DocumentType::class);
         $file = $request->file('file');
+
+        abort_if(
+            ! $type->allowsMultiple() && $this->hasType($request->user()->id, $type),
+            422,
+            "Your {$type->label()} is already uploaded. Edit that document instead of uploading it again.",
+        );
 
         $path = $file->store(
             'student-documents/'.$request->user()->id,
@@ -63,6 +71,8 @@ class StudentDocumentController extends Controller
             '/departments/documents',
         );
 
+        $this->handoffs->syncDocuments($request->user(), $request->user());
+
         return StudentDocumentResource::make($document)
             ->response()
             ->setStatusCode(201);
@@ -78,6 +88,13 @@ class StudentDocumentController extends Controller
         );
 
         $type = $request->enum('type', DocumentType::class);
+
+        abort_if(
+            ! $type->allowsMultiple() && $this->hasType($request->user()->id, $type, $document->id),
+            422,
+            "Your {$type->label()} is already uploaded. Edit that document instead.",
+        );
+
         $title = $request->string('title')->toString() ?: $type->label();
         $file = $request->file('file');
 
@@ -113,6 +130,8 @@ class StudentDocumentController extends Controller
             '/departments/documents',
         );
 
+        $this->handoffs->syncDocuments($request->user(), $request->user());
+
         return StudentDocumentResource::make($document->fresh());
     }
 
@@ -128,9 +147,20 @@ class StudentDocumentController extends Controller
         $document->deleteFile();
         $document->delete();
 
+        $this->handoffs->syncDocuments($request->user(), $request->user());
+
         return response()->json([
             'message' => 'Document deleted.',
         ]);
+    }
+
+    private function hasType(int $userId, DocumentType $type, ?int $exceptId = null): bool
+    {
+        return StudentDocument::query()
+            ->where('user_id', $userId)
+            ->where('type', $type)
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->exists();
     }
 
     public function download(Request $request, StudentDocument $document): StreamedResponse

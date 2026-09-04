@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\UpdateStudentApplicationRequest;
 use App\Http\Resources\StudentApplicationResource;
 use App\Models\User;
+use App\Services\DepartmentHandoffService;
 use App\Services\StudentApplicationService;
 use App\Services\StudentNotificationService;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,7 @@ class StudentApplicationController extends Controller
     public function __construct(
         private readonly StudentApplicationService $applications,
         private readonly StudentNotificationService $notifications,
+        private readonly DepartmentHandoffService $handoffs,
     )
     {
     }
@@ -36,6 +38,7 @@ class StudentApplicationController extends Controller
             'data' => [
                 'application' => StudentApplicationResource::make($payload['application'])->resolve(),
                 'checklist' => $payload['checklist'],
+                'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
                 'current_status' => $payload['application']->stage->label(),
@@ -66,6 +69,7 @@ class StudentApplicationController extends Controller
             'data' => [
                 'application' => StudentApplicationResource::make($payload['application'])->resolve(),
                 'checklist' => $payload['checklist'],
+                'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
                 'current_status' => $payload['application']->stage->label(),
@@ -78,9 +82,23 @@ class StudentApplicationController extends Controller
         User $student,
     ): JsonResponse {
         abort_unless($student->isStudent(), 404);
+        abort_unless(
+            $request->user()?->canWorkInDepartment(StaffDepartment::Interview),
+            403,
+            'Only Interview staff can update preparation and interviews.',
+        );
 
         $application = $this->applications->forStudent($student);
         $application->consultant_id = $request->user()->id;
+
+        $schedulingInterview = $request->boolean('unlock_interview')
+            || $request->filled('interview_at');
+
+        abort_if(
+            $schedulingInterview && ! $this->handoffs->feesCleared($student),
+            422,
+            'A/C & Finance has not cleared this student\'s charges yet.',
+        );
 
         $beforeStage = $application->stage;
         $beforeInterviewUnlockedAt = $application->interview_unlocked_at;
@@ -204,6 +222,7 @@ class StudentApplicationController extends Controller
             'data' => [
                 'application' => StudentApplicationResource::make($payload['application'])->resolve(),
                 'checklist' => $payload['checklist'],
+                'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
                 'current_status' => $payload['application']->stage->label(),
@@ -234,6 +253,7 @@ class StudentApplicationController extends Controller
             'data' => [
                 'application' => StudentApplicationResource::make($payload['application'])->resolve(),
                 'checklist' => $payload['checklist'],
+                'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
                 'current_status' => $payload['application']->stage->label(),
@@ -299,6 +319,7 @@ class StudentApplicationController extends Controller
             'data' => [
                 'application' => StudentApplicationResource::make($payload['application'])->resolve(),
                 'checklist' => $payload['checklist'],
+                'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
                 'current_status' => $payload['application']->stage->label(),

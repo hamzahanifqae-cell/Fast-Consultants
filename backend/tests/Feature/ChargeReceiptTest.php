@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\ChargeReceiptStatus;
 use App\Models\ChargeReceipt;
+use App\Models\University;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,8 +27,9 @@ class ChargeReceiptTest extends TestCase
 
     public function test_consultant_uploads_slip_student_reuploads_and_consultant_rechecks(): void
     {
-        $consultant = User::factory()->consultant()->create();
+        $consultant = $this->makeFinanceStaff();
         $student = User::factory()->student()->create();
+        $this->letFinanceRaiseCharges($student);
 
         Sanctum::actingAs($consultant);
 
@@ -77,7 +79,7 @@ class ChargeReceiptTest extends TestCase
 
     public function test_consultant_can_reject_student_slip_with_reason(): void
     {
-        $consultant = User::factory()->consultant()->create();
+        $consultant = $this->makeFinanceStaff();
         $student = User::factory()->student()->create();
 
         $receipt = ChargeReceipt::query()->create([
@@ -180,5 +182,30 @@ class ChargeReceiptTest extends TestCase
         Sanctum::actingAs($superAdmin);
         $this->get("/api/consultant/charge-receipts/{$receipt->id}/consultant-file")->assertOk();
         $this->get("/api/consultant/charge-receipts/{$receipt->id}/student-file")->assertOk();
+    }
+
+    private function makeFinanceStaff(): User
+    {
+        $finance = User::factory()->consultant()->create();
+        $finance->syncPermissions([
+            \App\Enums\Permission::FinanceView->value,
+            \App\Enums\Permission::FinanceManage->value,
+        ]);
+
+        return $finance->fresh();
+    }
+
+    /** Charges can only be raised once Universities has shared an option. */
+    private function letFinanceRaiseCharges(User $student): void
+    {
+        $university = University::query()->create([
+            'consultant_id' => User::factory()->consultant()->create()->id,
+            'name' => 'Shared University',
+            'country' => 'Canada',
+            'city' => 'Toronto',
+            'is_visible_to_students' => true,
+        ]);
+
+        $student->assignedUniversities()->syncWithoutDetaching([$university->id]);
     }
 }

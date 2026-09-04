@@ -6,6 +6,7 @@ import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { PageStats, PageTips } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import type { StudentApplication, VisaAppointment } from '@/types/auth';
 import './dashboard.css';
@@ -59,6 +60,9 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
       return data.data;
     },
   });
+
+  const handoffQuery = useStudentHandoff(showInterview ? studentId : null);
+  const interviewLock = handoffLockMessage(handoffQuery.data, 'interview');
 
   const directoryCount = studentsQuery.data?.length ?? 0;
   const appointmentCount = appointmentsQuery.data?.length ?? 0;
@@ -259,11 +263,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   <p>
                     Stage: <strong>{application.stage_label}</strong>
                   </p>
-                  {!application.everything_accepted ? (
-                    <p className="form-error">
-                      Documents and charge slips are not all accepted yet.
-                    </p>
-                  ) : null}
+                  {interviewLock ? <p className="handoff-lock">{interviewLock}</p> : null}
                   <label className="field">
                     <span>Preparation title</span>
                     <input value={prepTitle} onChange={(event) => setPrepTitle(event.target.value)} />
@@ -309,7 +309,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   <button
                     className="primary-btn"
                     type="submit"
-                    disabled={updateApplication.isPending}>
+                    disabled={updateApplication.isPending || Boolean(interviewLock)}>
                     Unlock / update interview
                   </button>
                 </form>

@@ -3,8 +3,6 @@
  * Web: --accent #f24e68, --accent-strong #e02a48, --accent-soft #fff0f3
  */
 
-import '@/global.css';
-
 import { Platform } from 'react-native';
 
 export const Brand = {

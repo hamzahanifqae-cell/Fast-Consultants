@@ -61,7 +61,7 @@
 
 .searchable-select-panel {
   position: absolute;
-  z-index: 40;
+  z-index: 60;
   left: 0;
   right: 0;
   top: calc(100% + 6px);
@@ -70,6 +70,16 @@
   background: var(--surface);
   box-shadow: var(--shadow-md);
   overflow: hidden;
+}
+
+.searchable-select.drop-up .searchable-select-panel {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* Keep the open control above neighbouring fields and sticky bars. */
+.searchable-select.open {
+  z-index: 60;
 }
 
 .searchable-select-search {

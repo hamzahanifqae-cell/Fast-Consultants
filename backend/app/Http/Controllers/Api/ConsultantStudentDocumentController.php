@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\UpdateStudentDocumentStatusRequest;
 use App\Http\Resources\StudentDocumentResource;
 use App\Models\StudentDocument;
+use App\Services\DepartmentHandoffService;
 use App\Services\StudentApplicationService;
 use App\Services\StudentNotificationService;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class ConsultantStudentDocumentController extends Controller
     public function __construct(
         private readonly StudentApplicationService $applications,
         private readonly StudentNotificationService $notifications,
+        private readonly DepartmentHandoffService $handoffs,
     ) {
     }
 
@@ -89,6 +91,8 @@ class ConsultantStudentDocumentController extends Controller
             $status === DocumentStatus::Approved ? 'document_approved' : 'document_rejected',
             '/student-documents',
         );
+
+        $this->handoffs->syncDocuments($document->user, $request->user());
 
         $afterApplication = $this->applications->forStudent($document->user);
 

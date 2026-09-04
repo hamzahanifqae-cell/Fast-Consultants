@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StaffDepartment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,6 +11,7 @@ class ChatStudentBlock extends Model
     /** @var list<string> */
     protected $fillable = [
         'student_id',
+        'department',
         'blocked_by',
         'blocked_at',
     ];
@@ -21,6 +23,7 @@ class ChatStudentBlock extends Model
     {
         return [
             'blocked_at' => 'datetime',
+            'department' => StaffDepartment::class,
         ];
     }
 

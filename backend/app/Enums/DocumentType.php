@@ -30,4 +30,13 @@ enum DocumentType: string
             self::Other => 'Other',
         };
     }
+
+    /**
+     * Catch-all types may hold several files; every other type is one file per student,
+     * edited in place when it gets rejected.
+     */
+    public function allowsMultiple(): bool
+    {
+        return $this === self::Other;
+    }
 }
