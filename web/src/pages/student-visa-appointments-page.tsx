@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { PageEmpty, PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
+import { PageEmpty, SectionProgress } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api } from '@/lib/api';
 import { StudentRoutes } from '@/lib/department-routes';
@@ -67,9 +67,7 @@ export function StudentVisaAppointmentsPage() {
           percent={visaProgress.percent}
         />
 
-        <PageSplit
-          main={
-            <section className="panel">
+        <section className="panel">
               <h2>Your appointments</h2>
               {appointmentsQuery.isLoading ? <p className="muted">Loading…</p> : null}
               <div className="stack-list">
@@ -105,18 +103,6 @@ export function StudentVisaAppointmentsPage() {
                 section is still open.
               </p>
             </section>
-          }
-          side={
-            <PageTips
-              title="Visa tips"
-              items={[
-                'Arrive early and bring the documents staff listed for you.',
-                'Check Messages if a time or embassy location looks wrong.',
-                'Preparation notes stay available under Preparation.',
-              ]}
-            />
-          }
-        />
       </div>
     </AppShell>
   );

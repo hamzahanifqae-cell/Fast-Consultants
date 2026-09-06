@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { StudentScreen } from '@/components/student/student-screen';
@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { isOrganizationUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
@@ -26,6 +27,9 @@ export default function ConsultantUniversitiesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const studentId = selected?.id ?? null;
+
+  const handoffQuery = useStudentHandoff(studentId);
+  const shareLock = handoffLockMessage(handoffQuery.data, 'universities');
 
   const catalogQuery = useQuery({
     queryKey: ['consultant-universities'],
@@ -66,7 +70,7 @@ export default function ConsultantUniversitiesScreen() {
     onSuccess: async () => {
       setAssignId(null);
       setError(null);
-            await queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ['student-assigned-universities', studentId],
       });
     },
@@ -93,16 +97,27 @@ export default function ConsultantUniversitiesScreen() {
   }
 
   return (
-    <StudentScreen
-      showBack
-      title="Universities">
+    <StudentScreen showBack title="Share with students">
+      <Pressable onPress={() => router.push('/consultant-universities-catalog')}>
+        <ThemedText type="smallBold" style={{ color: theme.primary }}>
+          Open catalog →
+        </ThemedText>
+      </Pressable>
+
       <DepartmentStudentGate
         selectedId={studentId}
         onSelect={setSelected}
-        onClear={() => setSelected(null)}>
+        onClear={() => setSelected(null)}
+        hint="Choose a student to share catalog options with them.">
         {error ? (
           <ThemedText type="small" style={styles.error}>
             {error}
+          </ThemedText>
+        ) : null}
+
+        {shareLock ? (
+          <ThemedText type="small" style={styles.warn}>
+            {shareLock}
           </ThemedText>
         ) : null}
 
@@ -153,10 +168,13 @@ export default function ConsultantUniversitiesScreen() {
             </ThemedText>
           ) : null}
           <Pressable
-            disabled={!assignId || assignUniversity.isPending}
+            disabled={!assignId || assignUniversity.isPending || Boolean(shareLock)}
             onPress={() => assignUniversity.mutate()}
-            style={[styles.button, { opacity: assignId ? 1 : 0.5 }]}>
-            <ThemedText type="smallBold" style={styles.buttonText}>
+            style={[
+              styles.button,
+              { backgroundColor: theme.inverted, opacity: assignId && !shareLock ? 1 : 0.5 },
+            ]}>
+            <ThemedText type="smallBold" style={{ color: theme.invertedText }}>
               Share with student
             </ThemedText>
           </Pressable>
@@ -181,13 +199,11 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, gap: 2 },
   button: {
-    backgroundColor: '#111',
     borderRadius: 999,
     alignItems: 'center',
     paddingVertical: 14,
     marginTop: Spacing.two,
   },
-  buttonText: { color: '#fff' },
   error: { color: '#D92D20' },
-  success: { color: '#039855' },
+  warn: { color: '#B54708', lineHeight: 20 },
 });

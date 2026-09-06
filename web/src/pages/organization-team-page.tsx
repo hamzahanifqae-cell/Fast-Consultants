@@ -2,12 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { PageEmpty, PageStats, PageTips } from '@/components/page-fill';
+import { PageEmpty } from '@/components/page-fill';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
-import { departmentRoutes } from '@/lib/department-routes';
-import { isSuperAdminPortalUser, orgPortalForUser } from '@/lib/portals';
+import { isSuperAdminPortalUser } from '@/lib/portals';
 import { hasPermission, isSuperAdminUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 import type {
@@ -179,36 +178,8 @@ export function OrganizationTeamPage() {
   return (
     <AppShell
       badge={canManage ? 'Super Admin' : 'Team'}
-      title="Team & permissions"
-      backTo={departmentRoutes(orgPortalForUser(user)).home}
-      backLabel="Dashboard">
+      title="Team & permissions">
       <div className="page-stack">
-        <PageStats
-          items={[
-            {
-              label: 'Teammates',
-              value: usersQuery.isLoading ? '…' : (usersQuery.data ?? []).length,
-              hint: 'Admin & Staff listed',
-              icon: '👥',
-              tone: 'blue',
-            },
-            {
-              label: 'Your access',
-              value: canManage ? 'Manage' : 'View',
-              hint: canManage ? 'Create and edit accounts' : 'Read-only directory',
-              icon: '🔑',
-              tone: 'coral',
-            },
-            {
-              label: 'Departments',
-              value: catalogQuery.isLoading ? '…' : departmentOptions.length,
-              hint: 'Staff home departments',
-              icon: '📁',
-              tone: 'gold',
-            },
-          ]}
-        />
-
         <div className="org-layout">
           <section className="panel">
             <h2>Team members</h2>
@@ -367,17 +338,6 @@ export function OrganizationTeamPage() {
           </section>
         ) : null}
       </div>
-
-        {!canManage ? (
-          <PageTips
-            title="Viewing the team"
-            items={[
-              'You can see Admin and Staff teammates.',
-              'Super Admin accounts stay hidden from this list.',
-              'Ask Super Admin if you need extra department access.',
-            ]}
-          />
-        ) : null}
       </div>
     </AppShell>
   );

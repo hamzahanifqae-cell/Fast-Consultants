@@ -1,26 +1,27 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
-import { AuthSheet } from '@/components/scoop-chrome';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
-import { api, getApiErrorMessage } from '@/lib/api';
 import { Brand } from '@/constants/theme';
+import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
+import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
 import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
+import { api, getApiErrorMessage } from '@/lib/api';
 import { type LoginPortal, portalMatchesUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthResponse } from '@/types/auth';
@@ -49,11 +50,10 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const keyboardInset = useKeyboardBottomInset();
-  const keyboardVisible = keyboardInset > 0;
+  const keyboardVisible = keyboardInset > 40;
+  const topInset = useAuthTopInset();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
-  const topInset = Math.max(insets.top, androidStatusBar);
+  useAuthStatusBar();
 
   const inputStyle = useMemo(
     () => ({
@@ -96,125 +96,132 @@ export default function LoginScreen() {
     <View style={styles.screen}>
       <AuthBackground />
 
-      <View style={styles.avoider}>
-        <SafeAreaView
-          style={[
-            styles.hero,
-            keyboardVisible && styles.heroCollapsed,
-            { paddingTop: topInset + 8 },
-          ]}
-          edges={['left', 'right']}>
-          <Pressable
-            accessibilityLabel="Back to role selection"
-            hitSlop={8}
-            onPress={() => router.replace('/welcome')}
-            style={styles.backBtn}>
-            <Text style={styles.backIcon}>←</Text>
-          </Pressable>
+      {/* Fixed back button below status bar */}
+      <View style={[styles.topChrome, { paddingTop: topInset }]}>
+        <Pressable
+          accessibilityLabel="Back to role selection"
+          hitSlop={8}
+          onPress={() => router.replace('/welcome')}
+          style={styles.backBtn}>
+          <Text style={styles.backIcon}>←</Text>
+        </Pressable>
+      </View>
 
-          {!keyboardVisible ? (
-            <View style={styles.heroBottom}>
-              <View style={styles.brandBlock}>
-                <BrandLogo size={56} />
-                <Text style={styles.roleTag}>{label}</Text>
-                <Text style={styles.brand}>Fast Consultants</Text>
-                <Text style={styles.heroSub}>
-                  {portal === 'student'
-                    ? 'Sign in to continue your application.'
-                    : portal === 'super_admin'
-                      ? 'Super Admin sign in only.'
-                      : 'Staff and Admin sign in only.'}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-        </SafeAreaView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.body, { paddingTop: topInset + 52 }]}>
+        {!keyboardVisible ? (
+          <View style={styles.heroCopy}>
+            <BrandLogo size={40} />
+            <Text style={styles.roleTag}>{label}</Text>
+            <Text style={styles.brand}>Fast Consultants</Text>
+            <Text style={styles.heroSub}>
+              {portal === 'student'
+                ? 'Sign in to continue your application.'
+                : portal === 'super_admin'
+                  ? 'Super Admin sign in only.'
+                  : 'Staff and Admin sign in only.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.heroFlex} />
+        )}
 
-        <View
-          style={[
-            { marginBottom: keyboardInset },
-            keyboardVisible && styles.sheetLift,
-          ]}>
-          <AuthSheet
-            fill={keyboardVisible}
-            disabled={submitting}
-            label={submitting ? 'Signing in…' : 'Sign In'}
-            onPress={() => void onSubmit()}>
-            <ScrollView
-              keyboardDismissMode="on-drag"
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              style={keyboardVisible ? styles.formScrollFill : styles.formScrollAuto}
-              contentContainerStyle={[
-                styles.form,
-                keyboardVisible && styles.formKeyboardOpen,
-              ]}>
-              {!keyboardVisible ? <ThemeToggle /> : null}
-              <View style={styles.signUpBlock}>
-                {isStudent ? (
-                  <>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.signUpHint}>
-                      Don’t have an account?
-                    </ThemedText>
-                    <Link href={{ pathname: '/register', params: { role: 'student' } }} asChild>
-                      <Pressable>
-                        <ThemedText type="linkPrimary">Create account</ThemedText>
-                      </Pressable>
-                    </Link>
-                  </>
-                ) : (
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.signUpHint}>
-                    Accounts are created by Super Admin. Use the matching portal for your role.
+        {/* Sheet hugs content — no flex:1 stretch / empty white void */}
+        <View style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
+          <ScrollView
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            contentContainerStyle={styles.form}>
+            <View style={styles.switchRow}>
+              {isStudent ? (
+                <View style={styles.switchCopy}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Don’t have an account?
                   </ThemedText>
-                )}
-              </View>
+                  <Link href={{ pathname: '/register', params: { role: 'student' } }} asChild>
+                    <Pressable>
+                      <ThemedText type="linkPrimary">Create account</ThemedText>
+                    </Pressable>
+                  </Link>
+                </View>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Accounts are created by Super Admin.
+                </ThemedText>
+              )}
+            </View>
 
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, inputStyle]}
+              value={email}
+            />
+
+            <View style={styles.passwordWrap}>
               <TextInput
                 autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                onChangeText={setEmail}
-                placeholder="Email"
+                onChangeText={setPassword}
+                placeholder="Password"
                 placeholderTextColor={theme.textSecondary}
-                style={[styles.emailInput, inputStyle]}
-                value={email}
+                secureTextEntry={!showPassword}
+                style={[styles.input, styles.passwordInput, inputStyle]}
+                value={password}
               />
+              <Pressable
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                hitSlop={8}
+                onPress={() => setShowPassword((value) => !value)}
+                style={styles.eye}>
+                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                  {showPassword ? 'Hide' : 'Show'}
+                </Text>
+              </Pressable>
+            </View>
 
-              <View style={styles.passwordWrap}>
-                <TextInput
-                  autoCapitalize="none"
-                  onChangeText={setPassword}
-                  placeholder="Password"
-                  placeholderTextColor={theme.textSecondary}
-                  secureTextEntry={!showPassword}
-                  style={[styles.passwordInput, inputStyle]}
-                  value={password}
-                />
-                <Pressable
-                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                  hitSlop={8}
-                  onPress={() => setShowPassword((value) => !value)}
-                  style={styles.eye}>
-                  <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
-                    {showPassword ? 'Hide' : 'Show'}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {error ? (
-                <ThemedText type="small" themeColor="danger" style={styles.error}>
-                  {error}
-                </ThemedText>
-              ) : null}
-
-              <ThemedText type="link" style={styles.forgot}>
-                Forgot password?
+            {error ? (
+              <ThemedText type="small" themeColor="danger" style={styles.error}>
+                {error}
               </ThemedText>
-            </ScrollView>
-          </AuthSheet>
+            ) : null}
+
+            <ThemedText type="link" style={styles.forgot}>
+              Forgot password?
+            </ThemedText>
+
+            <Pressable
+              accessibilityLabel="Sign In"
+              accessibilityRole="button"
+              disabled={submitting}
+              onPress={() => void onSubmit()}
+              style={({ pressed }) => [
+                styles.ctaWrap,
+                { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
+              ]}>
+              <LinearGradient
+                colors={[...Brand.buttonGradient]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={styles.cta}>
+                <Text style={styles.ctaLabel}>{submitting ? 'Signing in…' : 'Sign In'}</Text>
+              </LinearGradient>
+            </Pressable>
+
+            {!keyboardVisible ? (
+              <View style={styles.themeBlock}>
+                <ThemeToggle />
+              </View>
+            ) : null}
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -224,32 +231,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Brand.ink,
   },
-  avoider: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheetLift: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'flex-end',
-  },
-  hero: {
-    flex: 1,
-    paddingHorizontal: 28,
-  },
-  heroCollapsed: {
-    flex: 0,
-    flexGrow: 0,
-    minHeight: 56,
+  topChrome: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    paddingHorizontal: 20,
     paddingBottom: 8,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   backIcon: {
     color: '#FFFFFF',
@@ -258,63 +255,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: -1,
   },
-  heroBottom: {
+  body: {
     flex: 1,
     justifyContent: 'flex-end',
-    paddingBottom: 28,
   },
-  brandBlock: {
-    gap: 10,
+  heroCopy: {
+    paddingHorizontal: 28,
+    gap: 4,
+    paddingBottom: 14,
+  },
+  heroFlex: {
+    flex: 1,
   },
   roleTag: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   brand: {
     color: '#FFFFFF',
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: '700',
   },
   heroSub: {
     color: 'rgba(255,255,255,0.62)',
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    maxHeight: '78%',
   },
   form: {
-    paddingHorizontal: 28,
-    paddingTop: 28,
-    paddingBottom: 8,
-    gap: 14,
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 22,
+    gap: 10,
   },
-  formScrollAuto: {
-    flexGrow: 0,
+  switchRow: {
+    marginBottom: 0,
   },
-  formScrollFill: {
-    flexGrow: 0,
-    flexShrink: 1,
+  switchCopy: {
+    gap: 2,
   },
-  formKeyboardOpen: {
-    paddingTop: 16,
-    paddingBottom: 4,
-  },
-  signUpBlock: {
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  signUpHint: {
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  emailInput: {
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+  input: {
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
   },
   passwordWrap: {
@@ -322,34 +314,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   passwordInput: {
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    paddingRight: 48,
-    fontSize: 16,
+    paddingRight: 56,
   },
   eye: {
     position: 'absolute',
     right: 12,
     height: 28,
-    minWidth: 40,
+    minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
   },
   eyeIcon: {
     fontSize: 13,
     fontWeight: '600',
   },
   error: {
-    fontSize: 13,
     textAlign: 'center',
   },
   forgot: {
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
+    marginTop: 0,
+    marginBottom: 2,
+  },
+  ctaWrap: {
+    borderRadius: 16,
+    overflow: 'hidden',
     marginTop: 2,
-    marginBottom: 4,
+  },
+  cta: {
+    minHeight: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaLabel: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  themeBlock: {
+    marginTop: 8,
   },
 });

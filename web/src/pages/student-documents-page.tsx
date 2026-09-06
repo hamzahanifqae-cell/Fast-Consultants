@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { InlinePageLoader } from '@/components/app-loader';
-import { PageEmpty, PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
+import { PageEmpty, SectionProgress } from '@/components/page-fill';
 import { RejectionFeedback } from '@/components/rejection-feedback';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
@@ -234,9 +234,7 @@ export function StudentDocumentsPage() {
           percent={documentsProgress.percent}
         />
 
-        <PageSplit
-          main={
-            <section className="panel">
+        <section className="panel">
               <h2>{editingId ? 'Edit document' : 'Upload a document'}</h2>
               {editingDoc ? (
                 <p className="muted" style={{ marginTop: 0 }}>
@@ -313,19 +311,6 @@ export function StudentDocumentsPage() {
                 </div>
               </form>
             </section>
-          }
-          side={
-            <PageTips
-              title="Upload tips"
-              items={[
-                'Each document type is uploaded once. Fix a rejected file with Edit instead of uploading again.',
-                'Pending and rejected documents can be edited or deleted.',
-                'Approved files stay locked after staff review.',
-                'Large photos are compressed automatically before upload.',
-              ]}
-            />
-          }
-        />
 
         <section className="panel">
           <h2>Your uploads</h2>

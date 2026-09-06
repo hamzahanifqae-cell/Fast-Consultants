@@ -141,7 +141,7 @@
 .shell-nav-link.active {
   background: linear-gradient(135deg, #f24e68, #e02a48);
   color: #ffffff;
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 10px 24px rgba(242, 78, 104, 0.35);
 }
 
 .shell-nav-link.active .shell-nav-indicator {
@@ -230,16 +230,28 @@
 }
 
 .shell-main {
-  padding: 24px 32px 48px;
+  padding: 0 32px 48px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 4px 16px;
+  padding: 20px 4px 16px;
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  background: color-mix(in srgb, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
 
 .shell-header-actions {
@@ -259,20 +271,26 @@
 }
 
 .shell-header h1 {
-  margin: 8px 0 0;
-  font-size: clamp(1.7rem, 2.2vw, 2rem);
-  font-weight: 800;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2vw, 1.95rem);
+  font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
   line-height: 1.15;
 }
 
+.shell-header-copy:has(.shell-header-back) h1 {
+  margin-top: 6px;
+}
+
 .shell-header p {
   margin: 8px 0 0;
   color: var(--muted);
-  max-width: 42rem;
-  line-height: 1.5;
-  font-size: 0.98rem;
+  max-width: 40rem;
+  line-height: 1.45;
+  font-size: 0.92rem;
+  font-weight: 500;
 }
 
 .shell-badge {
@@ -280,7 +298,8 @@
 }
 
 .shell-content {
-  margin-top: 8px;
+  margin-top: 20px;
+  flex: 1;
 }
 
 @media (max-width: 980px) {
@@ -311,6 +330,10 @@
   }
 
   .shell-main {
-    padding: 20px 18px 36px;
+    padding: 0 18px 36px;
+  }
+
+  .shell-header {
+    padding-top: 16px;
   }
 }

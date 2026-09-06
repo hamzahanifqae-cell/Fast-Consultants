@@ -1,26 +1,27 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
-import { AuthSheet } from '@/components/scoop-chrome';
-import { ThemedText } from '@/components/themed-text';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { api, getApiErrorMessage } from '@/lib/api';
+import { ThemedText } from '@/components/themed-text';
 import { Brand } from '@/constants/theme';
+import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
+import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
 import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
+import { api, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthResponse } from '@/types/auth';
 
@@ -35,14 +36,15 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const keyboardInset = useKeyboardBottomInset();
-  const keyboardVisible = keyboardInset > 0;
+  const keyboardVisible = keyboardInset > 40;
+  const topInset = useAuthTopInset();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
-  const topInset = Math.max(insets.top, androidStatusBar);
+  useAuthStatusBar();
 
   const inputStyle = useMemo(
     () => ({
@@ -51,35 +53,6 @@ export default function RegisterScreen() {
     }),
     [theme],
   );
-
-  if (attemptedConsultant) {
-    return (
-      <View style={styles.screen}>
-        <AuthBackground />
-        <SafeAreaView style={styles.hero} edges={['top']}>
-          <Pressable
-            accessibilityLabel="Back to role selection"
-            hitSlop={8}
-            onPress={() => router.replace('/welcome')}
-            style={styles.backBtn}>
-            <Text style={styles.backIcon}>←</Text>
-          </Pressable>
-          <View style={styles.heroBottom}>
-            <Text style={styles.roleTag}>Team</Text>
-            <Text style={styles.brand}>Fast Consultants</Text>
-            <Text style={styles.heroSub}>
-              Team accounts are created by Super Admin. Sign in if you already have access.
-            </Text>
-            <Link href={{ pathname: '/login', params: { role: 'consultant' } }} asChild>
-              <Pressable style={{ marginTop: 16 }}>
-                <ThemedText type="linkPrimary">Go to Sign In</ThemedText>
-              </Pressable>
-            </Link>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
 
   async function onSubmit() {
     setError(null);
@@ -102,18 +75,11 @@ export default function RegisterScreen() {
     }
   }
 
-  return (
-    <View style={styles.screen}>
-      <AuthBackground />
-
-      <View style={styles.avoider}>
-        <SafeAreaView
-          style={[
-            styles.hero,
-            keyboardVisible && styles.heroCollapsed,
-            { paddingTop: topInset + 8 },
-          ]}
-          edges={['left', 'right']}>
+  if (attemptedConsultant) {
+    return (
+      <View style={styles.screen}>
+        <AuthBackground />
+        <View style={[styles.topChrome, { paddingTop: topInset }]}>
           <Pressable
             accessibilityLabel="Back to role selection"
             hitSlop={8}
@@ -121,94 +87,191 @@ export default function RegisterScreen() {
             style={styles.backBtn}>
             <Text style={styles.backIcon}>←</Text>
           </Pressable>
+        </View>
+        <View style={[styles.blockedBody, { paddingTop: topInset + 60 }]}>
+          <Text style={styles.roleTag}>Team</Text>
+          <Text style={styles.brand}>Fast Consultants</Text>
+          <Text style={styles.heroSub}>
+            Team accounts are created by Super Admin. Sign in if you already have access.
+          </Text>
+          <Link href={{ pathname: '/login', params: { role: 'consultant' } }} asChild>
+            <Pressable style={{ marginTop: 16 }}>
+              <ThemedText type="linkPrimary">Go to Sign In</ThemedText>
+            </Pressable>
+          </Link>
+        </View>
+      </View>
+    );
+  }
 
-          {!keyboardVisible ? (
-            <View style={styles.heroBottom}>
-              <View style={styles.brandBlock}>
-                <BrandLogo size={56} />
-                <Text style={styles.roleTag}>Student</Text>
-                <Text style={styles.brand}>Fast Consultants</Text>
-                <Text style={styles.heroSub}>Create a student account to get started.</Text>
-              </View>
-            </View>
-          ) : null}
-        </SafeAreaView>
+  return (
+    <View style={styles.screen}>
+      <AuthBackground />
+
+      <View style={[styles.topChrome, { paddingTop: topInset }]}>
+        <Pressable
+          accessibilityLabel="Back to role selection"
+          hitSlop={8}
+          onPress={() => router.replace('/welcome')}
+          style={styles.backBtn}>
+          <Text style={styles.backIcon}>←</Text>
+        </Pressable>
+      </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.body, { paddingTop: topInset + 52 }]}>
+        {!keyboardVisible ? (
+          <View style={styles.heroCopy}>
+            <BrandLogo size={40} />
+            <Text style={styles.roleTag}>Student</Text>
+            <Text style={styles.brand}>Fast Consultants</Text>
+            <Text style={styles.heroSub}>Create a student account to get started.</Text>
+          </View>
+        ) : null}
 
         <View
           style={[
-            { marginBottom: keyboardInset },
-            keyboardVisible && styles.sheetLift,
+            styles.sheet,
+            { backgroundColor: theme.backgroundElement },
+            keyboardVisible && styles.sheetKeyboard,
           ]}>
-          <AuthSheet
-            fill={keyboardVisible}
-            disabled={submitting}
-            label={submitting ? 'Creating…' : 'Sign Up'}
-            onPress={() => void onSubmit()}>
-            <ScrollView
-              keyboardDismissMode="on-drag"
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              style={keyboardVisible ? styles.formScrollFill : styles.formScrollAuto}
-              contentContainerStyle={[styles.form, keyboardVisible && styles.formKeyboardOpen]}>
-              {!keyboardVisible ? <ThemeToggle /> : null}
-              <View style={styles.signInBlock}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Already have an account?
-                </ThemedText>
-                <Link href={{ pathname: '/login', params: { role: 'student' } }} asChild>
-                  <Pressable>
-                    <ThemedText type="linkPrimary">Sign In</ThemedText>
-                  </Pressable>
-                </Link>
-              </View>
+          <ScrollView
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            style={keyboardVisible ? styles.formScroll : undefined}
+            contentContainerStyle={styles.form}>
+            <View style={styles.switchRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Already have an account?
+              </ThemedText>
+              <Link href={{ pathname: '/login', params: { role: 'student' } }} asChild>
+                <Pressable>
+                  <ThemedText type="linkPrimary">Sign In</ThemedText>
+                </Pressable>
+              </Link>
+            </View>
 
-              <TextInput
-                autoComplete="name"
-                onChangeText={setName}
-                placeholder="Full name"
-                placeholderTextColor={theme.textSecondary}
-                style={[styles.input, inputStyle]}
-                value={name}
-              />
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                onChangeText={setEmail}
-                placeholder="Email"
-                placeholderTextColor={theme.textSecondary}
-                style={[styles.input, inputStyle]}
-                value={email}
-              />
+            <TextInput
+              autoComplete="name"
+              onChangeText={setName}
+              placeholder="Full name"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, inputStyle]}
+              value={name}
+            />
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, inputStyle]}
+              value={email}
+            />
+            <View style={styles.passwordWrap}>
               <TextInput
                 autoCapitalize="none"
                 onChangeText={setPassword}
                 placeholder="Password (min 8 characters)"
                 placeholderTextColor={theme.textSecondary}
-                secureTextEntry
-                style={[styles.input, inputStyle]}
+                secureTextEntry={!showPassword}
+                style={[styles.input, styles.passwordInput, inputStyle]}
                 value={password}
               />
+              <Pressable
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                hitSlop={8}
+                onPress={() => setShowPassword((value) => !value)}
+                style={styles.eye}>
+                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                  {showPassword ? 'Hide' : 'Show'}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.passwordWrap}>
               <TextInput
                 autoCapitalize="none"
                 onChangeText={setPasswordConfirmation}
                 placeholder="Confirm password"
                 placeholderTextColor={theme.textSecondary}
-                secureTextEntry
-                style={[styles.input, inputStyle]}
+                secureTextEntry={!showPasswordConfirmation}
+                style={[styles.input, styles.passwordInput, inputStyle]}
                 value={passwordConfirmation}
               />
+              <Pressable
+                accessibilityLabel={
+                  showPasswordConfirmation ? 'Hide confirm password' : 'Show confirm password'
+                }
+                hitSlop={8}
+                onPress={() => setShowPasswordConfirmation((value) => !value)}
+                style={styles.eye}>
+                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                  {showPasswordConfirmation ? 'Hide' : 'Show'}
+                </Text>
+              </Pressable>
+            </View>
 
-              {error ? (
-                <ThemedText type="small" themeColor="danger" style={styles.error}>
-                  {error}
-                </ThemedText>
-              ) : null}
-            </ScrollView>
-          </AuthSheet>
+            {error ? (
+              <ThemedText type="small" themeColor="danger" style={styles.error}>
+                {error}
+              </ThemedText>
+            ) : null}
+
+            {/* Keep CTA in the scroll list when keyboard is closed */}
+            {!keyboardVisible ? (
+              <>
+                <Pressable
+                  accessibilityLabel="Sign Up"
+                  accessibilityRole="button"
+                  disabled={submitting}
+                  onPress={() => void onSubmit()}
+                  style={({ pressed }) => [
+                    styles.ctaWrap,
+                    { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
+                  ]}>
+                  <LinearGradient
+                    colors={[...Brand.buttonGradient]}
+                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    style={styles.cta}>
+                    <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
+                  </LinearGradient>
+                </Pressable>
+                <View style={styles.themeBlock}>
+                  <ThemeToggle />
+                </View>
+              </>
+            ) : null}
+          </ScrollView>
+
+          {/* Sticky Sign Up above the keyboard so it never hides */}
+          {keyboardVisible ? (
+            <View style={styles.ctaDock}>
+              <Pressable
+                accessibilityLabel="Sign Up"
+                accessibilityRole="button"
+                disabled={submitting}
+                onPress={() => void onSubmit()}
+                style={({ pressed }) => [
+                  styles.ctaWrap,
+                  { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
+                ]}>
+                <LinearGradient
+                  colors={[...Brand.buttonGradient]}
+                  end={{ x: 1, y: 1 }}
+                  start={{ x: 0, y: 0 }}
+                  style={styles.cta}>
+                  <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -218,33 +281,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Brand.ink,
   },
-  avoider: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheetLift: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'flex-end',
-  },
-  hero: {
-    flex: 0.34,
-    minHeight: 120,
-    paddingHorizontal: 28,
-  },
-  heroCollapsed: {
-    flex: 0,
-    flexGrow: 0,
-    minHeight: 56,
+  topChrome: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    paddingHorizontal: 20,
     paddingBottom: 8,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   backIcon: {
     color: '#FFFFFF',
@@ -253,63 +305,112 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: -1,
   },
-  heroBottom: {
+  blockedBody: {
+    paddingHorizontal: 28,
+    gap: 8,
+  },
+  body: {
     flex: 1,
     justifyContent: 'flex-end',
-    paddingBottom: 20,
   },
-  brandBlock: {
-    gap: 8,
+  heroCopy: {
+    paddingHorizontal: 28,
+    gap: 4,
+    paddingBottom: 14,
   },
   roleTag: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   brand: {
     color: '#FFFFFF',
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: '700',
   },
   heroSub: {
     color: 'rgba(255,255,255,0.62)',
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    maxHeight: '82%',
+  },
+  sheetKeyboard: {
+    flex: 1,
+    maxHeight: undefined,
+  },
+  formScroll: {
+    flex: 1,
   },
   form: {
-    paddingHorizontal: 28,
-    paddingTop: 22,
-    paddingBottom: 8,
-    gap: 12,
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 12,
+    gap: 10,
   },
-  formScrollAuto: {
-    flexGrow: 0,
-  },
-  formScrollFill: {
-    flexGrow: 0,
-    flexShrink: 1,
-  },
-  formKeyboardOpen: {
-    paddingTop: 16,
-    paddingBottom: 4,
-  },
-  signInBlock: {
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+  switchRow: {
+    gap: 2,
+    marginBottom: 0,
   },
   input: {
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     fontSize: 16,
   },
-  error: {
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 56,
+  },
+  eye: {
+    position: 'absolute',
+    right: 12,
+    height: 28,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eyeIcon: {
     fontSize: 13,
+    fontWeight: '600',
+  },
+  error: {
     textAlign: 'center',
+  },
+  ctaDock: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  ctaWrap: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  cta: {
+    minHeight: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaLabel: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  themeBlock: {
+    marginTop: 8,
   },
 });

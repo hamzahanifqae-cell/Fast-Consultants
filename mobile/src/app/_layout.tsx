@@ -7,10 +7,11 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, lazy, Suspense } from 'react';
-import { View } from 'react-native';
+import { Platform, StatusBar as RNStatusBar, View } from 'react-native';
 
 import { PageLoader } from '@/components/page-loader';
 import { RootErrorBoundary } from '@/components/root-error-boundary';
@@ -37,6 +38,8 @@ export default function RootLayout() {
   const hydrateTheme = useThemeStore((state) => state.hydrate);
   const themeHydrated = useThemeStore((state) => state.hydrated);
   const canvas = Colors[colorScheme].background;
+  // expo-status-bar: "dark" = dark icons (for light backgrounds)
+  const statusBarStyle = statusBarOverride ?? (colorScheme === 'dark' ? 'light' : 'dark');
   const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
@@ -54,6 +57,18 @@ export default function RootLayout() {
     }
   }, [fontError, hydrated, themeHydrated, fontsLoaded]);
 
+  // Sync system icons with theme / auth override. Keep Android bar translucent so
+  // dark auth gradients and light dashboards show through correctly.
+  useEffect(() => {
+    const rnStyle = statusBarStyle === 'light' ? 'light-content' : 'dark-content';
+    RNStatusBar.setBarStyle(rnStyle, true);
+    if (Platform.OS === 'android') {
+      RNStatusBar.setBackgroundColor('transparent', true);
+      RNStatusBar.setTranslucent(true);
+    }
+    void SystemUI.setBackgroundColorAsync(canvas);
+  }, [canvas, statusBarStyle]);
+
   if ((!fontsLoaded && !fontError) || !hydrated || !themeHydrated) {
     return <PageLoader fullScreen message="Starting Fast Consultants…" />;
   }
@@ -63,7 +78,7 @@ export default function RootLayout() {
       <AppProviders>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <View style={{ flex: 1, backgroundColor: canvas }}>
-          <StatusBar style={statusBarOverride ?? (colorScheme === 'dark' ? 'light' : 'dark')} />
+          <StatusBar style={statusBarStyle} backgroundColor="transparent" translucent />
           <Stack
             screenOptions={{
               headerShown: false,
@@ -87,6 +102,8 @@ export default function RootLayout() {
           <Stack.Screen name="student-documents" />
           <Stack.Screen name="student-universities" />
           <Stack.Screen name="consultant-universities" />
+          <Stack.Screen name="consultant-universities-catalog" />
+          <Stack.Screen name="consultant-universities-department" />
           <Stack.Screen name="student-charge-receipts" />
           <Stack.Screen name="consultant-charge-receipts" />
           <Stack.Screen name="student-status" />

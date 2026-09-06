@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
-import { PageEmpty, PageStats, PageTips } from '@/components/page-fill';
+import { PageEmpty } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
 import { api, getApiErrorMessage } from '@/lib/api';
@@ -12,7 +12,7 @@ import './dashboard.css';
 
 export function ConsultantDocumentsPage() {
   const queryClient = useQueryClient();
-  const { studentId, selectStudent, clearStudent, studentsQuery } = useDepartmentStudentParam();
+  const { studentId, selectStudent, clearStudent } = useDepartmentStudentParam();
 
   const documentsQuery = useQuery({
     queryKey: ['consultant-documents', studentId],
@@ -32,7 +32,6 @@ export function ConsultantDocumentsPage() {
   const docs = documentsQuery.data ?? [];
   const pending = useMemo(() => docs.filter((item) => item.status === 'pending'), [docs]);
   const approved = useMemo(() => docs.filter((item) => item.status === 'approved'), [docs]);
-  const directoryCount = studentsQuery.data?.length ?? 0;
 
   const updateStatus = useMutation({
     mutationFn: async (payload: {
@@ -76,46 +75,6 @@ export function ConsultantDocumentsPage() {
           setError(null);
         }}>
         {error ? <p className="form-error">{error}</p> : null}
-        <PageStats
-          items={[
-            {
-              label: 'Students',
-              value: studentsQuery.isLoading ? '…' : directoryCount,
-              hint: 'In the shared directory',
-              icon: '🎓',
-              tone: 'purple',
-            },
-            {
-              label: 'Pending review',
-              value: documentsQuery.isLoading ? '…' : pending.length,
-              hint: 'Need approve / reject',
-              icon: '⏳',
-              tone: 'gold',
-            },
-            {
-              label: 'Approved',
-              value: documentsQuery.isLoading ? '…' : approved.length,
-              hint: 'Still viewable anytime',
-              icon: '✓',
-              tone: 'teal',
-            },
-            {
-              label: 'All uploads',
-              value: documentsQuery.isLoading ? '…' : docs.length,
-              hint: 'For this student',
-              icon: '📄',
-              tone: 'blue',
-            },
-          ]}
-        />
-        <PageTips
-          title="Review checklist"
-          items={[
-            'Open the file before approving or rejecting.',
-            'Approved files stay available for Student Info and Super Admin.',
-            'Always leave a short rejection reason.',
-          ]}
-        />
         <div className="stack-list">
           {documentsQuery.isLoading ? <p className="muted">Loading documents…</p> : null}
           {!documentsQuery.isLoading && pending.length === 0 ? (

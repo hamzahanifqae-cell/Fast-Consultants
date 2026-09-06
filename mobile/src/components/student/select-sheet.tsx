@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -6,12 +6,15 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { compareSearchMatch, optionMatchesQuery } from '@/lib/option-search';
 
 export type SelectOption = {
   label: string;
@@ -41,48 +44,62 @@ export function SelectSheet({
   onSelect,
 }: SelectSheetProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [query, setQuery] = useState('');
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) {
-      return options;
-    }
+  useEffect(() => {
+    if (visible) setQuery('');
+  }, [visible]);
 
-    return options.filter(
-      (option) =>
-        option.label.toLowerCase().includes(needle) ||
-        option.value.toLowerCase().includes(needle) ||
-        (option.prefix ?? '').toLowerCase().includes(needle),
-    );
+  const filtered = useMemo(() => {
+    const needle = query.trim();
+    if (!needle) return options;
+    return options
+      .filter((option) => optionMatchesQuery(option, needle))
+      .sort((a, b) => compareSearchMatch(a, b, needle));
   }, [options, query]);
 
+  // Window height already shrinks when Android keyboard opens (resize mode),
+  // so size the list from that — do not also add keyboard margin (that jammed the sheet to the top).
+  const listMaxHeight = Math.max(140, Math.min(360, windowHeight * 0.42));
+
+  function close() {
+    setQuery('');
+    Keyboard.dismiss();
+    onClose();
+  }
+
   return (
-    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
+    <Modal
+      animationType="slide"
+      onRequestClose={close}
+      statusBarTranslucent
+      transparent
+      visible={visible}>
       <View style={styles.overlay}>
-        <Pressable
-          onPress={() => {
-            setQuery('');
-            onClose();
-          }}
-          style={styles.backdrop}
-        />
-        <View style={[styles.sheet, { backgroundColor: theme.background }]}>
+        <Pressable onPress={close} style={styles.backdrop} />
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.background,
+              paddingBottom: Math.max(insets.bottom, Spacing.three),
+            },
+          ]}>
           <View style={styles.header}>
             <ThemedText type="smallBold">{title}</ThemedText>
-            <Pressable
-              hitSlop={8}
-              onPress={() => {
-                setQuery('');
-                onClose();
-              }}>
+            <Pressable hitSlop={8} onPress={close}>
               <ThemedText type="smallBold">Done</ThemedText>
             </Pressable>
           </View>
 
           {searchable ? (
             <TextInput
+              autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="off"
+              clearButtonMode="while-editing"
               onChangeText={setQuery}
               placeholder={searchPlaceholder}
               placeholderTextColor={theme.textSecondary}
@@ -98,7 +115,8 @@ export function SelectSheet({
             data={filtered}
             keyExtractor={(item) => item.value}
             keyboardShouldPersistTaps="handled"
-            style={{ maxHeight: 440 }}
+            keyboardDismissMode="on-drag"
+            style={{ maxHeight: listMaxHeight }}
             renderItem={({ item }) => {
               const isSelected = item.value === selected;
               return (
@@ -193,16 +211,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
-    maxHeight: '78%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
-    paddingBottom: Spacing.four,
+    zIndex: 2,
   },
   header: {
     flexDirection: 'row',
@@ -217,9 +234,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: Spacing.two,
-  },
-  list: {
-    flexGrow: 0,
   },
   option: {
     minHeight: 48,

@@ -42,11 +42,7 @@ export function StudentInfoDepartmentPage() {
   const count = students.length;
 
   return (
-    <AppShell
-      badge="Student Info"
-      title="Student Info"
-      backTo={routes.home}
-      backLabel="Dashboard">
+    <AppShell badge="Student Info" title="Student Info">
       <div className="page-stack">
         <PageSplit
           main={

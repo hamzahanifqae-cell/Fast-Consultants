@@ -3,8 +3,6 @@ import { StyleSheet, View } from 'react-native';
 
 import { StudentScreen } from '@/components/student/student-screen';
 import { StudentStackCards } from '@/components/student/student-stack-card';
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hasPermission, isOrganizationUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
@@ -52,13 +50,7 @@ export default function ConsultantStudentDepartmentScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <StudentScreen
-        showBack
-        title="Student Info">
-        <View style={[styles.badge, { backgroundColor: theme.cardTeal }]}>
-          <ThemedText type="smallBold">Information & documents</ThemedText>
-        </View>
-
+      <StudentScreen showBack title="Student Info">
         <StudentStackCards items={items} />
       </StudentScreen>
     </View>
@@ -68,12 +60,5 @@ export default function ConsultantStudentDepartmentScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    marginBottom: Spacing.three,
   },
 });

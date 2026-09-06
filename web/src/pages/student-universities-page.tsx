@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { PageEmpty, PageTips, SectionProgress } from '@/components/page-fill';
+import { PageEmpty, SectionProgress } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api } from '@/lib/api';
 import type { University } from '@/types/auth';
@@ -75,15 +75,6 @@ export function StudentUniversitiesPage() {
             </div>
           ))}
         </div>
-
-        <PageTips
-          title="Reading this list"
-          items={[
-            'Only universities assigned to you are shown, not the full catalog.',
-            'Required documents may differ by university.',
-            'Message Universities if you need clarification on an option.',
-          ]}
-        />
       </div>
     </AppShell>
   );

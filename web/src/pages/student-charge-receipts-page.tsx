@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { PageEmpty, PageTips, SectionProgress } from '@/components/page-fill';
+import { PageEmpty, SectionProgress } from '@/components/page-fill';
 import { RejectionFeedback } from '@/components/rejection-feedback';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
@@ -117,9 +117,9 @@ export function StudentChargeReceiptsPage() {
             const consultantKey = `consultant-${receipt.id}`;
             const studentKey = `student-${receipt.id}`;
             return (
-              <div key={receipt.id} className="panel">
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <h2 style={{ margin: 0 }}>{receipt.title}</h2>
+              <div key={receipt.id} className="receipt-card">
+                <div className="receipt-card-head">
+                  <h2>{receipt.title}</h2>
                   <span
                     className={`status-pill${
                       receipt.status === 'rejected'
@@ -131,15 +131,15 @@ export function StudentChargeReceiptsPage() {
                     {receipt.status_label}
                   </span>
                 </div>
-                <p style={{ marginTop: 10 }}>
+                <p className="field-hint">
                   {receipt.amount ? `${receipt.currency ?? ''} ${receipt.amount}` : 'Amount in slip notes'}
                 </p>
-                {receipt.notes ? <p>{receipt.notes}</p> : null}
+                {receipt.notes ? <p className="field-hint">{receipt.notes}</p> : null}
                 {receipt.status === 'rejected' && receipt.rejection_reason ? (
                   <RejectionFeedback reason={receipt.rejection_reason} />
                 ) : null}
 
-                <div className="org-actions" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+                <div className="org-actions" style={{ flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="primary-btn doc-view-btn"
@@ -171,7 +171,7 @@ export function StudentChargeReceiptsPage() {
                 </div>
 
                 {receipt.status === 'awaiting_student' || receipt.status === 'rejected' ? (
-                  <label className="field" style={{ marginTop: 12 }}>
+                  <label className="field">
                     <span>Upload paid slip / screenshot</span>
                     <input
                       type="file"
@@ -187,15 +187,6 @@ export function StudentChargeReceiptsPage() {
             );
           })}
         </div>
-
-        <PageTips
-          title="Payment tips"
-          items={[
-            'Include the full receipt amount and reference in the screenshot.',
-            'If rejected, read the reason and upload a clearer copy.',
-            'Approved fees help unlock interview preparation.',
-          ]}
-        />
       </div>
     </AppShell>
   );

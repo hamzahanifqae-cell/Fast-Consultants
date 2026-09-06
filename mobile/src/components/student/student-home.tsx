@@ -12,6 +12,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
+import { welcomeTimestamp, welcomeTitle } from '@/lib/greeting';
 import {
   documentsSectionProgress,
   feesSectionProgress,
@@ -145,7 +146,6 @@ export function StudentHome({ user, token, onLogout }: Props) {
   );
   const profileComplete = profileProgress.complete;
 
-  const firstName = user.name.split(' ')[0] ?? user.name;
   const prepOpen = Boolean(statusQuery.data?.preparation_available);
   const interviewOpen = Boolean(statusQuery.data?.interview_available);
 
@@ -172,14 +172,9 @@ export function StudentHome({ user, token, onLogout }: Props) {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
         }
-        showMenu>
-        <View style={styles.hero}>
-          <ThemedText type="heading">Hello, {firstName} 🎓</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Your admission workspace, documents, universities, fees, and interview in one place.
-          </ThemedText>
-        </View>
-
+        showMenu
+        title={welcomeTitle(user.name)}
+        subtitle={welcomeTimestamp()}>
         <StudentProgressCard
           appointments={appointments}
           loading={statusQuery.isLoading || profileQuery.isLoading}
@@ -405,11 +400,6 @@ export function StudentHome({ user, token, onLogout }: Props) {
 const styles = StyleSheet.create({
   screenPad: {
     paddingBottom: Spacing.five,
-  },
-  hero: {
-    gap: Spacing.two,
-    paddingTop: Spacing.one,
-    paddingBottom: Spacing.one,
   },
   sectionBlock: {
     gap: Spacing.two,

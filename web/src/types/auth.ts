@@ -47,6 +47,14 @@ export type OrganizationUser = AuthUser;
 
 export type InformationCategory = 'education' | 'job' | 'other';
 
+export type StudentEducation = {
+  id?: number | null;
+  education_level: string;
+  institution_name: string;
+  field_of_study: string;
+  graduation_year: string;
+};
+
 export type StudentProfile = {
   name: string;
   email: string;
@@ -64,6 +72,7 @@ export type StudentProfile = {
   institution_name: string | null;
   field_of_study: string | null;
   graduation_year: string | null;
+  educations?: StudentEducation[];
   job_title: string | null;
   employer_name: string | null;
   years_of_experience: string | null;

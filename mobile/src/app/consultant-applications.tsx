@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApplicationStatusResponse, StudentApplication } from '@/types/auth';
@@ -49,6 +50,10 @@ export default function ConsultantApplicationsScreen() {
     () => applicationsQuery.data?.find((item) => item.student?.id === selectedId) ?? null,
     [applicationsQuery.data, selectedId],
   );
+
+  const handoffQuery = useStudentHandoff(selectedId);
+  const interviewLock = handoffLockMessage(handoffQuery.data, 'interview');
+  const interviewBlocked = Boolean(interviewLock) || !selected?.everything_accepted;
 
   useEffect(() => {
     if (!selected) return;
@@ -182,13 +187,15 @@ export default function ConsultantApplicationsScreen() {
             <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
               <ThemedText type="subtitle">Update {selected.student?.name}</ThemedText>
 
-              {!selected.everything_accepted ? (
+              {!selected.everything_accepted || interviewLock ? (
                 <ThemedText type="small" style={styles.warn}>
-                  Documents and charge slips are not all accepted yet.
+                  {interviewLock ??
+                    'Documents and charge slips are not all accepted yet.'}
                 </ThemedText>
               ) : null}
 
               <TextInput
+                editable={!interviewBlocked}
                 onChangeText={setPrepTitle}
                 placeholder="Preparation title"
                 placeholderTextColor={theme.textSecondary}
@@ -196,6 +203,7 @@ export default function ConsultantApplicationsScreen() {
                 value={prepTitle}
               />
               <TextInput
+                editable={!interviewBlocked}
                 multiline
                 onChangeText={setPrepBody}
                 placeholder="Preparation guidance for the student"
@@ -210,6 +218,7 @@ export default function ConsultantApplicationsScreen() {
 
               <ThemedText type="smallBold">Interview</ThemedText>
               <TextInput
+                editable={!interviewBlocked}
                 onChangeText={setInterviewAt}
                 placeholder="Interview time e.g. 2026-08-25 15:00"
                 placeholderTextColor={theme.textSecondary}
@@ -217,6 +226,7 @@ export default function ConsultantApplicationsScreen() {
                 value={interviewAt}
               />
               <TextInput
+                editable={!interviewBlocked}
                 onChangeText={setInterviewMode}
                 placeholder="Mode e.g. Online / In person"
                 placeholderTextColor={theme.textSecondary}
@@ -224,6 +234,7 @@ export default function ConsultantApplicationsScreen() {
                 value={interviewMode}
               />
               <TextInput
+                editable={!interviewBlocked}
                 onChangeText={setInterviewLocation}
                 placeholder="In-person address (optional)"
                 placeholderTextColor={theme.textSecondary}
@@ -231,6 +242,7 @@ export default function ConsultantApplicationsScreen() {
                 value={interviewLocation}
               />
               <TextInput
+                editable={!interviewBlocked}
                 multiline
                 onChangeText={setInterviewNotes}
                 placeholder="Interview notes"
@@ -250,13 +262,12 @@ export default function ConsultantApplicationsScreen() {
               ) : null}
 
               <Pressable
-                disabled={!selected.everything_accepted || updateApplication.isPending}
+                disabled={interviewBlocked || updateApplication.isPending}
                 onPress={() => updateApplication.mutate()}
                 style={[
                   styles.button,
                   {
-                    opacity:
-                      !selected.everything_accepted || updateApplication.isPending ? 0.6 : 1,
+                    opacity: interviewBlocked || updateApplication.isPending ? 0.6 : 1,
                   },
                 ]}>
                 <ThemedText type="smallBold" style={styles.buttonText}>

@@ -80,7 +80,12 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
     { to: routes.home, label: 'Dashboard' },
     ...(showStudents ? [{ to: routes.studentInfo.root, label: 'Student Info' }] : []),
     ...(showStudents ? [{ to: routes.documents.root, label: 'Documents' }] : []),
-    ...(showUniversities ? [{ to: routes.universities.root, label: 'Universities' }] : []),
+    ...(showUniversities
+      ? [
+          { to: routes.universities.share, label: 'Universities' },
+          { to: routes.universities.catalog, label: 'Catalog' },
+        ]
+      : []),
     ...(showFinance ? [{ to: routes.finance.root, label: 'Finance' }] : []),
     ...(showInterview ? [{ to: routes.interview.root, label: 'Interview' }] : []),
     ...(showVisa ? [{ to: routes.visa.root, label: 'Visa' }] : []),

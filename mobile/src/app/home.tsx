@@ -12,6 +12,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
+import { welcomeRoleTitle, welcomeTimestamp } from '@/lib/greeting';
 import { hasPermission, isOrganizationUser, isStaffPortalUser, isSuperAdminUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatUiStore } from '@/stores/chat-ui-store';
@@ -74,7 +75,6 @@ export default function HomeScreen() {
     return <SuperAdminHome onLogout={onLogout} token={token} user={user} />;
   }
 
-  const firstName = user.name.split(' ')[0] ?? user.name;
   const showStudents =
     hasPermission(user, 'student_info.view') || hasPermission(user, 'student_info.manage');
   const showUniversities =
@@ -185,7 +185,12 @@ export default function HomeScreen() {
           {
             emoji: '🎓',
             label: 'Universities',
-            onPress: () => router.push('/departments/universities'),
+            onPress: () => router.push('/consultant-universities'),
+          },
+          {
+            emoji: '📚',
+            label: 'Catalog',
+            onPress: () => router.push('/consultant-universities-catalog'),
           },
         ]
       : []),
@@ -224,23 +229,14 @@ export default function HomeScreen() {
     },
   ];
 
-  const roleLabel = user.is_super_admin
-    ? 'Super Admin'
-    : user.is_staff
-      ? (user.staff_department_label ?? 'Staff')
-      : 'Admin';
-
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <StudentScreen
         contentStyle={styles.screenPad}
         onMenuPress={() => setMenuOpen(true)}
         showMenu
-        title={`Hello, ${firstName}`}>
-        <View style={[styles.badge, { backgroundColor: theme.cardLime }]}>
-          <ThemedText type="smallBold">{roleLabel}</ThemedText>
-        </View>
-
+        title={welcomeRoleTitle('Staff')}
+        subtitle={welcomeTimestamp()}>
         <View style={styles.section}>
           <ThemedText type="section" themeColor="textSecondary">
             Departments
@@ -273,12 +269,6 @@ const styles = StyleSheet.create({
   },
   screenPad: {
     paddingBottom: Spacing.five,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
   },
   section: {
     gap: Spacing.two,

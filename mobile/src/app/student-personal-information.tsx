@@ -35,6 +35,14 @@ import type { DocumentType, Gender, InformationCategory, StudentDocument, Studen
 
 type ProfileSection = 'personal' | InformationCategory;
 
+type EducationEntry = {
+  key: string;
+  education_level: string;
+  institution_name: string;
+  field_of_study: string;
+  graduation_year: string;
+};
+
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
@@ -49,9 +57,13 @@ const INFORMATION_OPTIONS: { value: 'personal' | InformationCategory; label: str
   { value: 'other', label: 'Other' },
 ];
 
-const EDUCATION_LEVEL_OPTIONS = ['Matric', 'Intermediate', "Bachelor's", 'Diploma'].map(
-  (level) => ({ label: level, value: level }),
-);
+const EDUCATION_LEVELS = ['Matric', 'Intermediate', "Bachelor's", 'Diploma'] as const;
+const EDUCATION_LEVEL_OPTIONS = EDUCATION_LEVELS.map((level) => ({
+  label: level,
+  value: level,
+}));
+
+type EducationLevel = (typeof EDUCATION_LEVELS)[number];
 
 function documentTypeForEducationLevel(level: string): {
   type: DocumentType;
@@ -68,6 +80,22 @@ function documentTypeForEducationLevel(level: string): {
 
 const MIN_BIRTH_DATE = new Date(1950, 0, 1);
 
+let educationKeySeq = 0;
+function nextEducationKey(): string {
+  educationKeySeq += 1;
+  return `edu-${educationKeySeq}`;
+}
+
+function emptyEducation(): EducationEntry {
+  return {
+    key: nextEducationKey(),
+    education_level: '',
+    institution_name: '',
+    field_of_study: '',
+    graduation_year: '',
+  };
+}
+
 type ProfileForm = {
   name: string;
   phone: string;
@@ -80,10 +108,7 @@ type ProfileForm = {
   passport_number: string;
   cnic_number: string;
   information_category: InformationCategory | null;
-  education_level: string;
-  institution_name: string;
-  field_of_study: string;
-  graduation_year: string;
+  educations: EducationEntry[];
   job_title: string;
   employer_name: string;
   years_of_experience: string;
@@ -102,10 +127,7 @@ const emptyForm: ProfileForm = {
   passport_number: '',
   cnic_number: '',
   information_category: null,
-  education_level: '',
-  institution_name: '',
-  field_of_study: '',
-  graduation_year: '',
+  educations: [emptyEducation()],
   job_title: '',
   employer_name: '',
   years_of_experience: '',
@@ -153,6 +175,24 @@ function formatDisplayDate(value: string): string {
 
 function toForm(profile: StudentProfile): ProfileForm {
   const phone = splitPhone(profile.phone);
+  const educations =
+    profile.educations && profile.educations.length > 0
+      ? profile.educations.map((entry) => ({
+          key: nextEducationKey(),
+          education_level: entry.education_level ?? '',
+          institution_name: entry.institution_name ?? '',
+          field_of_study: entry.field_of_study ?? '',
+          graduation_year: entry.graduation_year ?? '',
+        }))
+      : [
+          {
+            key: nextEducationKey(),
+            education_level: profile.education_level ?? '',
+            institution_name: profile.institution_name ?? '',
+            field_of_study: profile.field_of_study ?? '',
+            graduation_year: profile.graduation_year ?? '',
+          },
+        ];
 
   return {
     name: profile.name ?? '',
@@ -166,10 +206,7 @@ function toForm(profile: StudentProfile): ProfileForm {
     passport_number: profile.passport_number ?? '',
     cnic_number: profile.cnic_number ?? '',
     information_category: profile.information_category,
-    education_level: profile.education_level ?? '',
-    institution_name: profile.institution_name ?? '',
-    field_of_study: profile.field_of_study ?? '',
-    graduation_year: profile.graduation_year ?? '',
+    educations,
     job_title: profile.job_title ?? '',
     employer_name: profile.employer_name ?? '',
     years_of_experience: profile.years_of_experience ?? '',
@@ -193,12 +230,12 @@ function personalFields(form: ProfileForm): string[] {
 }
 
 function educationFields(form: ProfileForm): string[] {
-  return [
-    form.education_level,
-    form.institution_name,
-    form.field_of_study,
-    form.graduation_year,
-  ];
+  return form.educations.flatMap((entry) => [
+    entry.education_level,
+    entry.institution_name,
+    entry.field_of_study,
+    entry.graduation_year,
+  ]);
 }
 
 function jobFields(form: ProfileForm): string[] {
@@ -223,6 +260,27 @@ function sectionLabel(section: ProfileSection): string {
   return 'personal';
 }
 
+function sectionPageTitle(section: ProfileSection): string {
+  if (section === 'education') return 'Education information';
+  if (section === 'job') return 'Job information';
+  if (section === 'other') return 'Other information';
+  return 'Personal information';
+}
+
+function previousSection(section: ProfileSection): ProfileSection | null {
+  if (section === 'education') return 'personal';
+  if (section === 'job') return 'education';
+  if (section === 'other') return 'job';
+  return null;
+}
+
+function nextSection(section: ProfileSection): ProfileSection | null {
+  if (section === 'personal') return 'education';
+  if (section === 'education') return 'job';
+  if (section === 'job') return 'other';
+  return null;
+}
+
 function sectionProgress(form: ProfileForm, section: ProfileSection) {
   const fields = sectionFields(form, section);
   const total = fields.length;
@@ -233,7 +291,7 @@ function sectionProgress(form: ProfileForm, section: ProfileSection) {
   return { filled, total, complete, progressPct };
 }
 
-function validateForm(form: ProfileForm): string | null {
+function validatePersonal(form: ProfileForm): string | null {
   if (!form.name.trim()) return 'Full name is required.';
   if (!form.phone.trim()) return 'Phone is required.';
   if (!form.date_of_birth) return 'Date of birth is required.';
@@ -247,23 +305,82 @@ function validateForm(form: ProfileForm): string | null {
   if (!CNIC_PATTERN.test(form.cnic_number.trim())) {
     return 'Enter a valid CNIC number (e.g. 12345-1234567-1).';
   }
+  return null;
+}
 
-  if (!form.education_level.trim()) return 'Education level is required.';
-  if (!form.institution_name.trim()) return 'Institution name is required.';
-  if (!form.field_of_study.trim()) return 'Field of study is required.';
-  if (!form.graduation_year.trim()) return 'Graduation year is required.';
+function validateEducation(form: ProfileForm): string | null {
+  if (form.educations.length === 0) return 'Add at least one education entry.';
+  for (let index = 0; index < form.educations.length; index += 1) {
+    const entry = form.educations[index];
+    const label = form.educations.length > 1 ? ` (entry ${index + 1})` : '';
+    if (!entry.education_level.trim()) return `Education level is required${label}.`;
+    if (!entry.institution_name.trim()) return `Institution name is required${label}.`;
+    if (!entry.field_of_study.trim()) return `Field of study is required${label}.`;
+    if (!entry.graduation_year.trim()) return `Graduation year is required${label}.`;
+  }
+  return null;
+}
 
+function validateJob(form: ProfileForm): string | null {
   if (!form.job_title.trim()) return 'Job title is required.';
   if (!form.employer_name.trim()) return 'Employer name is required.';
   if (!form.years_of_experience.trim()) return 'Years of experience is required.';
-
-  if (!form.other_information.trim()) return 'Please describe your other information.';
-
-  if (!form.information_category) {
-    return 'Open Education, Job, or Other from the dropdown after filling each section.';
-  }
-
   return null;
+}
+
+function validateOther(form: ProfileForm): string | null {
+  if (!form.other_information.trim()) return 'Please describe your other information.';
+  return null;
+}
+
+function validateSection(form: ProfileForm, section: ProfileSection): string | null {
+  if (section === 'personal') return validatePersonal(form);
+  if (section === 'education') return validateEducation(form);
+  if (section === 'job') return validateJob(form);
+  return validateOther(form);
+}
+
+function validateForm(form: ProfileForm): string | null {
+  return (
+    validatePersonal(form) ||
+    validateEducation(form) ||
+    validateJob(form) ||
+    validateOther(form)
+  );
+}
+
+function toPayload(form: ProfileForm) {
+  const category = (form.information_category || 'other') as InformationCategory;
+  const educations = form.educations.map((entry) => ({
+    education_level: entry.education_level.trim(),
+    institution_name: entry.institution_name.trim(),
+    field_of_study: entry.field_of_study.trim(),
+    graduation_year: entry.graduation_year.trim(),
+  }));
+  const primary = educations[0];
+
+  return {
+    name: form.name.trim(),
+    phone: form.phone.trim(),
+    date_of_birth: form.date_of_birth.trim(),
+    gender: form.gender,
+    nationality: form.nationality.trim(),
+    country_of_residence: form.country_of_residence.trim(),
+    city: form.city.trim(),
+    address: form.address.trim(),
+    passport_number: form.passport_number.trim(),
+    cnic_number: form.cnic_number.trim(),
+    information_category: category,
+    educations,
+    education_level: primary?.education_level ?? '',
+    institution_name: primary?.institution_name ?? '',
+    field_of_study: primary?.field_of_study ?? '',
+    graduation_year: primary?.graduation_year ?? '',
+    job_title: form.job_title.trim(),
+    employer_name: form.employer_name.trim(),
+    years_of_experience: form.years_of_experience.trim(),
+    other_information: form.other_information.trim(),
+  };
 }
 
 const COUNTRY_OPTIONS = COUNTRIES.map((country) => ({
@@ -301,7 +418,10 @@ export default function StudentPersonalInformationScreen() {
   const [activeSection, setActiveSection] = useState<'personal' | InformationCategory>('personal');
   const [passportPicked, setPassportPicked] = useState<PickedUploadFile | null>(null);
   const [cnicPicked, setCnicPicked] = useState<PickedUploadFile | null>(null);
-  const [educationPicked, setEducationPicked] = useState<PickedUploadFile | null>(null);
+  const [educationPicked, setEducationPicked] = useState<Record<string, PickedUploadFile | null>>(
+    {},
+  );
+  const [educationLevelEntryKey, setEducationLevelEntryKey] = useState<string | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [openSheet, setOpenSheet] = useState<
     'gender' | 'country' | 'dial' | 'city' | 'nationality' | 'information' | 'education_level' | null
@@ -330,17 +450,17 @@ export default function StudentPersonalInformationScreen() {
     });
   }, [form.nationality]);
   const educationLevelOptions = useMemo(() => {
-    if (
-      form.education_level &&
-      !EDUCATION_LEVEL_OPTIONS.some((option) => option.value === form.education_level)
-    ) {
-      return [
-        { label: form.education_level, value: form.education_level },
-        ...EDUCATION_LEVEL_OPTIONS,
-      ];
-    }
-    return EDUCATION_LEVEL_OPTIONS;
-  }, [form.education_level]);
+    const extras = form.educations
+      .map((entry) => entry.education_level)
+      .filter(
+        (level) => level && !EDUCATION_LEVELS.includes(level as EducationLevel),
+      );
+    const uniqueExtras = [...new Set(extras)];
+    return [
+      ...EDUCATION_LEVEL_OPTIONS,
+      ...uniqueExtras.map((level) => ({ label: level, value: level })),
+    ];
+  }, [form.educations]);
   const selectedDial = COUNTRIES.find((country) => country.iso === dialIso)?.dial ?? DEFAULT_DIAL;
   const selectedDialCountry = findCountryByDial(selectedDial);
 
@@ -372,16 +492,6 @@ export default function StudentPersonalInformationScreen() {
     [documentsQuery.data],
   );
 
-  const educationDocMeta = useMemo(
-    () => documentTypeForEducationLevel(form.education_level),
-    [form.education_level],
-  );
-
-  const existingEducationDoc = useMemo(() => {
-    if (!educationDocMeta || !documentsQuery.data) return null;
-    return documentsQuery.data.find((doc) => doc.type === educationDocMeta.type) ?? null;
-  }, [documentsQuery.data, educationDocMeta]);
-
   useEffect(() => {
     if (profileQuery.data) {
       const phone = splitPhone(profileQuery.data.phone);
@@ -390,14 +500,8 @@ export default function StudentPersonalInformationScreen() {
     }
   }, [profileQuery.data]);
 
-  useEffect(() => {
-    setEducationPicked(null);
-    setDocumentError(null);
-  }, [form.education_level]);
-
   const saveProfile = useMutation({
     mutationFn: async (payload: ProfileForm) => {
-      const category = (payload.information_category ?? 'education') as InformationCategory;
       const docs = queryClient.getQueryData<StudentDocument[]>(['student-documents']) ?? [];
       const uploads: Promise<void>[] = [];
 
@@ -423,41 +527,27 @@ export default function StudentPersonalInformationScreen() {
         );
       }
 
-      const educationMeta = documentTypeForEducationLevel(payload.education_level);
-      if (educationPicked && educationMeta) {
-        uploads.push(
-          uploadStudentDocument({
-            type: educationMeta.type,
-            title: educationMeta.title,
-            file: educationPicked,
-            existing: docs.find((doc) => doc.type === educationMeta.type) ?? null,
-          }),
-        );
+      for (const entry of payload.educations) {
+        const file = educationPicked[entry.key];
+        const educationMeta = documentTypeForEducationLevel(entry.education_level);
+        if (file && educationMeta) {
+          uploads.push(
+            uploadStudentDocument({
+              type: educationMeta.type,
+              title: educationMeta.title,
+              file,
+              existing: docs.find((doc) => doc.type === educationMeta.type) ?? null,
+            }),
+          );
+        }
       }
 
       await Promise.all(uploads);
 
-      const { data } = await api.put<{ data: StudentProfile; message: string }>('/student/profile', {
-        name: payload.name.trim(),
-        phone: payload.phone.trim(),
-        date_of_birth: payload.date_of_birth.trim(),
-        gender: payload.gender,
-        nationality: payload.nationality.trim(),
-        country_of_residence: payload.country_of_residence.trim(),
-        city: payload.city.trim(),
-        address: payload.address.trim(),
-        passport_number: payload.passport_number.trim(),
-        cnic_number: payload.cnic_number.trim(),
-        information_category: category,
-        education_level: payload.education_level.trim(),
-        institution_name: payload.institution_name.trim(),
-        field_of_study: payload.field_of_study.trim(),
-        graduation_year: payload.graduation_year.trim(),
-        job_title: payload.job_title.trim(),
-        employer_name: payload.employer_name.trim(),
-        years_of_experience: payload.years_of_experience.trim(),
-        other_information: payload.other_information.trim(),
-      });
+      const { data } = await api.put<{ data: StudentProfile; message: string }>(
+        '/student/profile',
+        toPayload(payload),
+      );
       return data;
     },
     onSuccess: (data) => {
@@ -466,7 +556,7 @@ export default function StudentPersonalInformationScreen() {
       setDocumentError(null);
       setPassportPicked(null);
       setCnicPicked(null);
-      setEducationPicked(null);
+      setEducationPicked({});
       queryClient.setQueryData(['student-profile'], data.data);
       void queryClient.invalidateQueries({ queryKey: ['student-profile'] });
       void queryClient.invalidateQueries({ queryKey: ['student-documents'] });
@@ -502,7 +592,7 @@ export default function StudentPersonalInformationScreen() {
       } else if (variables.type === 'cnic') {
         setCnicPicked(null);
       } else {
-        setEducationPicked(null);
+        setEducationPicked({});
       }
       await queryClient.invalidateQueries({ queryKey: ['student-documents'] });
       await queryClient.invalidateQueries({ queryKey: ['student-application-status'] });
@@ -536,8 +626,53 @@ export default function StudentPersonalInformationScreen() {
     }
   }
 
-  const { filled, total, complete, progressPct } = sectionProgress(form, activeSection);
+  function updateEducation(key: string, patch: Partial<Omit<EducationEntry, 'key'>>) {
+    setForm((current) => ({
+      ...current,
+      educations: current.educations.map((entry) =>
+        entry.key === key ? { ...entry, ...patch } : entry,
+      ),
+    }));
+    if (patch.education_level !== undefined) {
+      setEducationPicked((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setDocumentError(null);
+    }
+  }
+
+  function addEducation() {
+    setForm((current) => ({
+      ...current,
+      educations: [...current.educations, emptyEducation()],
+    }));
+    setError(null);
+  }
+
+  function removeEducation(key: string) {
+    setForm((current) => ({
+      ...current,
+      educations:
+        current.educations.length <= 1
+          ? current.educations
+          : current.educations.filter((entry) => entry.key !== key),
+    }));
+    setEducationPicked((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  const { complete, progressPct } = sectionProgress(form, activeSection);
   const sectionName = sectionLabel(activeSection);
+  const backSection = previousSection(activeSection);
+  const educationLevelEntry = form.educations.find(
+    (entry) => entry.key === educationLevelEntryKey,
+  );
+  const hasEducationFiles = Object.values(educationPicked).some(Boolean);
 
   async function pickDocumentFile(onPick: (file: PickedUploadFile) => void) {
     setDocumentError(null);
@@ -565,8 +700,10 @@ export default function StudentPersonalInformationScreen() {
     });
   }
 
-  async function pickEducationDocument() {
-    await pickDocumentFile(setEducationPicked);
+  async function pickEducationDocument(entryKey: string) {
+    await pickDocumentFile((file) => {
+      setEducationPicked((current) => ({ ...current, [entryKey]: file }));
+    });
   }
 
   async function pickPassportDocument() {
@@ -578,36 +715,38 @@ export default function StudentPersonalInformationScreen() {
   }
 
   function onSave() {
-    const payload = {
-      ...form,
-      phone: joinPhone(selectedDial, form.phone),
-    };
-    const validationError = validateForm(payload);
-    if (validationError) {
-      setError(validationError);
-      if (
-        validationError.includes('Education') ||
-        validationError.includes('Institution') ||
-        validationError.includes('Field of study') ||
-        validationError.includes('Graduation')
-      ) {
-        setActiveSection('education');
-      } else if (
-        validationError.includes('Job') ||
-        validationError.includes('Employer') ||
-        validationError.includes('experience')
-      ) {
-        setActiveSection('job');
-      } else if (validationError.includes('other information')) {
-        setActiveSection('other');
-      } else if (validationError.includes('education, job, or other')) {
-        setActiveSection('education');
-      } else {
-        setActiveSection('personal');
-      }
+    setError(null);
+
+    const sectionError = validateSection(form, activeSection);
+    if (sectionError) {
+      setError(sectionError);
       return;
     }
-    saveProfile.mutate(payload);
+
+    const upcoming = nextSection(activeSection);
+    if (upcoming) {
+      onSectionChange(upcoming);
+      return;
+    }
+
+    const saveForm: ProfileForm = {
+      ...form,
+      information_category: form.information_category || 'other',
+    };
+    const fullError = validateForm(saveForm);
+    if (fullError) {
+      setError(fullError);
+      if (validatePersonal(saveForm)) setActiveSection('personal');
+      else if (validateEducation(saveForm)) setActiveSection('education');
+      else if (validateJob(saveForm)) setActiveSection('job');
+      else setActiveSection('other');
+      return;
+    }
+
+    saveProfile.mutate({
+      ...saveForm,
+      phone: joinPhone(selectedDial, form.phone),
+    });
   }
 
   function onPickDate(event: DateTimePickerEvent, date?: Date) {
@@ -629,11 +768,27 @@ export default function StudentPersonalInformationScreen() {
       style={{ flex: 1 }}>
       <StudentScreen
         showBack
-        title="Personal information">
+        onBackPress={() => {
+          if (backSection) {
+            setActiveSection(backSection);
+            return;
+          }
+          router.back();
+        }}
+        title={sectionPageTitle(activeSection)}>
         {profileQuery.isLoading ? (
           <ActivityIndicator />
         ) : (
           <>
+            {backSection ? (
+              <Pressable
+                onPress={() => setActiveSection(backSection)}
+                style={styles.sectionBack}>
+                <ThemedText type="smallBold">
+                  ← Back to {sectionPageTitle(backSection).toLowerCase()}
+                </ThemedText>
+              </Pressable>
+            ) : null}
             <SectionProgress
               loading={false}
               title={
@@ -972,109 +1127,174 @@ export default function StudentPersonalInformationScreen() {
 
             {activeSection === 'education' ? (
               <>
-                <SelectField
-                  label="Education level"
-                  placeholder="Select education level"
-                  required
-                  variant="form"
-                  valueLabel={form.education_level || null}
-                  onPress={() => setOpenSheet('education_level')}
-                />
-                <Field
-                  label="Institution name"
-                  onChangeText={(value) => updateField('institution_name', value)}
-                  placeholder="School or university"
-                  required
-                  theme={theme}
-                  value={form.institution_name}
-                />
-                <Field
-                  label="Field of study"
-                  onChangeText={(value) => updateField('field_of_study', value)}
-                  placeholder="e.g. Computer Science"
-                  required
-                  theme={theme}
-                  value={form.field_of_study}
-                />
-                <Field
-                  label="Graduation year"
-                  onChangeText={(value) => updateField('graduation_year', value)}
-                  placeholder="e.g. 2024"
-                  required
-                  theme={theme}
-                  value={form.graduation_year}
-                />
+                {form.educations.map((entry, index) => {
+                  const educationDocMeta = documentTypeForEducationLevel(entry.education_level);
+                  const existingEducationDoc = educationDocMeta
+                    ? (documentsQuery.data?.find(
+                        (doc) => doc.type === educationDocMeta.type,
+                      ) ?? null)
+                    : null;
+                  const pickedFile = educationPicked[entry.key] ?? null;
 
-                <View style={styles.field}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
-                    Upload {educationDocMeta?.title ?? 'education document'}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Saved uploads appear on your Documents page as pending for approval.
-                  </ThemedText>
-                  {existingEducationDoc ? (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      On file: {existingEducationDoc.original_name} (
-                      {existingEducationDoc.status_label})
-                    </ThemedText>
-                  ) : null}
-                  <Pressable
-                    disabled={
-                      !educationDocMeta || uploadDocument.isPending || saveProfile.isPending
-                    }
-                    onPress={() => void pickEducationDocument()}
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.backgroundElement,
-                        borderColor: theme.border,
-                      },
-                    ]}>
-                    <ThemedText
-                      style={{
-                        color: educationPicked ? theme.text : theme.textSecondary,
-                      }}>
-                      {educationPicked?.name ?? 'Choose document file'}
-                    </ThemedText>
-                  </Pressable>
-                  <Pressable
-                    disabled={
-                      !educationDocMeta ||
-                      !educationPicked ||
-                      uploadDocument.isPending ||
-                      saveProfile.isPending
-                    }
-                    onPress={() => {
-                      if (!educationDocMeta || !educationPicked) return;
-                      uploadDocument.mutate({
-                        type: educationDocMeta.type,
-                        title: educationDocMeta.title,
-                        file: educationPicked,
-                      });
-                    }}
-                    style={[
-                      styles.docUploadBtn,
-                      {
-                        opacity:
-                          !educationDocMeta ||
-                          !educationPicked ||
-                          uploadDocument.isPending ||
-                          saveProfile.isPending
-                            ? 0.55
-                            : 1,
-                      },
-                    ]}>
-                    <ThemedText type="smallBold">
-                      {uploadDocument.isPending
-                        ? 'Uploading…'
-                        : existingEducationDoc &&
-                            (existingEducationDoc.status === 'pending' ||
-                              existingEducationDoc.status === 'rejected')
-                          ? 'Replace document'
-                          : 'Upload document'}
-                    </ThemedText>
-                  </Pressable>
-                </View>
+                  return (
+                    <View
+                      key={entry.key}
+                      style={[
+                        styles.educationCard,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: theme.backgroundElement,
+                        },
+                      ]}>
+                      <View style={styles.educationCardHead}>
+                        <ThemedText type="smallBold">
+                          Education{form.educations.length > 1 ? ` ${index + 1}` : ''}
+                        </ThemedText>
+                        {form.educations.length > 1 ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            hitSlop={8}
+                            onPress={() => removeEducation(entry.key)}>
+                            <ThemedText type="small" style={styles.removeEducation}>
+                              Remove
+                            </ThemedText>
+                          </Pressable>
+                        ) : null}
+                      </View>
+
+                      <SelectField
+                        label="Education level"
+                        placeholder="Select education level"
+                        required
+                        variant="form"
+                        valueLabel={entry.education_level || null}
+                        onPress={() => {
+                          setEducationLevelEntryKey(entry.key);
+                          setOpenSheet('education_level');
+                        }}
+                      />
+                      <Field
+                        label="Institution name"
+                        onChangeText={(value) =>
+                          updateEducation(entry.key, { institution_name: value })
+                        }
+                        placeholder="School or university"
+                        required
+                        theme={theme}
+                        value={entry.institution_name}
+                      />
+                      <Field
+                        label="Field of study"
+                        onChangeText={(value) =>
+                          updateEducation(entry.key, { field_of_study: value })
+                        }
+                        placeholder="e.g. Computer Science"
+                        required
+                        theme={theme}
+                        value={entry.field_of_study}
+                      />
+                      <Field
+                        label="Graduation year"
+                        onChangeText={(value) =>
+                          updateEducation(entry.key, { graduation_year: value })
+                        }
+                        placeholder="e.g. 2024"
+                        required
+                        theme={theme}
+                        value={entry.graduation_year}
+                      />
+
+                      <View style={styles.field}>
+                        <ThemedText
+                          type="small"
+                          themeColor="textSecondary"
+                          style={styles.fieldLabel}>
+                          Upload {educationDocMeta?.title ?? 'education document'}
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          Saved uploads appear on your Documents page as pending for approval.
+                        </ThemedText>
+                        {existingEducationDoc ? (
+                          <ThemedText type="small" themeColor="textSecondary">
+                            On file: {existingEducationDoc.original_name} (
+                            {existingEducationDoc.status_label})
+                          </ThemedText>
+                        ) : null}
+                        <Pressable
+                          disabled={
+                            !educationDocMeta ||
+                            uploadDocument.isPending ||
+                            saveProfile.isPending
+                          }
+                          onPress={() => void pickEducationDocument(entry.key)}
+                          style={[
+                            styles.input,
+                            {
+                              backgroundColor: theme.background,
+                              borderColor: theme.border,
+                            },
+                          ]}>
+                          <ThemedText
+                            style={{
+                              color: pickedFile ? theme.text : theme.textSecondary,
+                            }}>
+                            {pickedFile?.name ?? 'Choose document file'}
+                          </ThemedText>
+                        </Pressable>
+                        <Pressable
+                          disabled={
+                            !educationDocMeta ||
+                            !pickedFile ||
+                            uploadDocument.isPending ||
+                            saveProfile.isPending
+                          }
+                          onPress={() => {
+                            if (!educationDocMeta || !pickedFile) return;
+                            uploadDocument.mutate({
+                              type: educationDocMeta.type,
+                              title: educationDocMeta.title,
+                              file: pickedFile,
+                            });
+                          }}
+                          style={[
+                            styles.docUploadBtn,
+                            {
+                              opacity:
+                                !educationDocMeta ||
+                                !pickedFile ||
+                                uploadDocument.isPending ||
+                                saveProfile.isPending
+                                  ? 0.55
+                                  : 1,
+                            },
+                          ]}>
+                          <ThemedText type="smallBold">
+                            {uploadDocument.isPending
+                              ? 'Uploading…'
+                              : existingEducationDoc &&
+                                  (existingEducationDoc.status === 'pending' ||
+                                    existingEducationDoc.status === 'rejected')
+                                ? 'Replace document'
+                                : 'Upload document'}
+                          </ThemedText>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={addEducation}
+                  style={[
+                    styles.addEducationBtn,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: theme.backgroundElement,
+                    },
+                  ]}>
+                  <ThemedText type="smallBold">+ Add another education</ThemedText>
+                </Pressable>
 
                 {documentError ? (
                   <ThemedText type="small" style={styles.error}>
@@ -1142,10 +1362,12 @@ export default function StudentPersonalInformationScreen() {
               ]}>
               <ThemedText type="smallBold" style={styles.buttonText}>
                 {saveProfile.isPending
-                  ? passportPicked || cnicPicked || educationPicked
+                  ? passportPicked || cnicPicked || hasEducationFiles
                     ? 'Saving and uploading…'
                     : 'Saving…'
-                  : 'Save changes'}
+                  : activeSection === 'other'
+                    ? 'Save and go to dashboard'
+                    : 'Continue'}
               </ThemedText>
             </Pressable>
             </StudentSurface>
@@ -1183,10 +1405,18 @@ export default function StudentPersonalInformationScreen() {
       />
 
       <SelectSheet
-        onClose={() => setOpenSheet(null)}
-        onSelect={(value) => updateField('education_level', value)}
+        onClose={() => {
+          setOpenSheet(null);
+          setEducationLevelEntryKey(null);
+        }}
+        onSelect={(value) => {
+          if (educationLevelEntryKey) {
+            updateEducation(educationLevelEntryKey, { education_level: value });
+          }
+          setEducationLevelEntryKey(null);
+        }}
         options={educationLevelOptions}
-        selected={form.education_level}
+        selected={educationLevelEntry?.education_level ?? null}
         title="Education level"
         visible={openSheet === 'education_level'}
       />
@@ -1330,6 +1560,11 @@ function Field({
 }
 
 const styles = StyleSheet.create({
+  sectionBack: {
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.one,
+    marginBottom: Spacing.one,
+  },
   formCard: {
     gap: Spacing.three,
     padding: Spacing.four,
@@ -1425,6 +1660,27 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#D0D5DD',
+  },
+  educationCard: {
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+  },
+  educationCardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  removeEducation: {
+    color: '#D92D20',
+  },
+  addEducationBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
   },
   error: {
     color: '#D92D20',

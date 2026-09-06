@@ -6,6 +6,7 @@ import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Brand } from '@/constants/theme';
+import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AccountType } from '@/types/auth';
@@ -43,6 +44,7 @@ const ROLES: {
 export default function WelcomeScreen() {
   const token = useAuthStore((state) => state.token);
   const theme = useTheme();
+  useAuthStatusBar();
 
   if (token) {
     return <Redirect href="/home" />;

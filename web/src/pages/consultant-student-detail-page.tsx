@@ -2,7 +2,6 @@ import { type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
-import { PageSplit, PageTips } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api } from '@/lib/api';
 import { departmentRoutes } from '@/lib/department-routes';
@@ -107,9 +106,7 @@ export function ConsultantStudentDetailPage() {
           </div>
         </div>
 
-        <PageSplit
-          main={
-            <div className="panel">
+        <div className="panel">
               <h2>Student profile</h2>
               {detailQuery.isLoading ? <p className="muted">Loading…</p> : null}
               {profile ? (
@@ -129,10 +126,29 @@ export function ConsultantStudentDetailPage() {
                   </ProfileSection>
 
                   <ProfileSection title="Education">
-                    <Row label="Education level" value={profile.education_level} />
-                    <Row label="Institution" value={profile.institution_name} />
-                    <Row label="Field of study" value={profile.field_of_study} />
-                    <Row label="Graduation year" value={profile.graduation_year} />
+                    {(profile.educations && profile.educations.length > 0
+                      ? profile.educations
+                      : [
+                          {
+                            education_level: profile.education_level,
+                            institution_name: profile.institution_name,
+                            field_of_study: profile.field_of_study,
+                            graduation_year: profile.graduation_year,
+                          },
+                        ]
+                    ).map((entry, index) => (
+                      <div key={`${entry.education_level}-${index}`} className="profile-detail-section">
+                        {(profile.educations?.length ?? 0) > 1 ? (
+                          <h3>Education {index + 1}</h3>
+                        ) : null}
+                        <div className="profile-detail-section-rows">
+                          <Row label="Education level" value={entry.education_level} />
+                          <Row label="Institution" value={entry.institution_name} />
+                          <Row label="Field of study" value={entry.field_of_study} />
+                          <Row label="Graduation year" value={entry.graduation_year} />
+                        </div>
+                      </div>
+                    ))}
                   </ProfileSection>
 
                   <ProfileSection title="Job">
@@ -146,21 +162,7 @@ export function ConsultantStudentDetailPage() {
                   </ProfileSection>
                 </div>
               ) : null}
-            </div>
-          }
-          side={
-            <>
-              <PageTips
-                title="Using this profile"
-                items={[
-                  'Confirm passport and contact before advising documents.',
-                  'Review education or job background before recommending programs.',
-                  'Students can edit these details in the student portal or mobile app.',
-                ]}
-              />
-            </>
-          }
-        />
+        </div>
       </div>
     </AppShell>
   );

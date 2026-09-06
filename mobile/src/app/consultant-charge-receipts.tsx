@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { downloadAndOpenReceiptFile } from '@/lib/receipt-download';
 import { useAuthStore } from '@/stores/auth-store';
@@ -40,6 +41,9 @@ export default function ConsultantChargeReceiptsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const studentId = selected?.id ?? null;
+
+  const handoffQuery = useStudentHandoff(studentId);
+  const chargeLock = handoffLockMessage(handoffQuery.data, 'finance');
 
   const receiptsQuery = useQuery({
     queryKey: ['consultant-charge-receipts', studentId],
@@ -153,7 +157,9 @@ export default function ConsultantChargeReceiptsScreen() {
   }
 
   const canCreate =
-    Boolean(studentId && title.trim() && pickedUri) && !createReceipt.isPending;
+    Boolean(studentId && title.trim() && pickedUri) &&
+    !createReceipt.isPending &&
+    !chargeLock;
 
   return (
     <StudentScreen
@@ -163,6 +169,12 @@ export default function ConsultantChargeReceiptsScreen() {
         selectedId={studentId}
         onSelect={setSelected}
         onClear={() => setSelected(null)}>
+          {chargeLock ? (
+            <ThemedText type="small" style={styles.warn}>
+              {chargeLock}
+            </ThemedText>
+          ) : null}
+
           <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="subtitle">Send charge slip</ThemedText>
 
@@ -405,5 +417,6 @@ const styles = StyleSheet.create({
   approveButton: { backgroundColor: '#039855' },
   rejectButton: { backgroundColor: '#D92D20' },
   error: { color: '#D92D20' },
+  warn: { color: '#B54708', lineHeight: 20 },
   success: { color: '#039855' },
 });

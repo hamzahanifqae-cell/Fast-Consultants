@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { PageBackButton } from '@/components/page-back-button';
-import { PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
+import { SectionProgress } from '@/components/page-fill';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { citiesForCountry } from '@/constants/cities';
@@ -14,6 +14,14 @@ import { StudentRoutes } from '@/lib/department-routes';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DocumentType, InformationCategory, StudentDocument, StudentProfile } from '@/types/auth';
 import './dashboard.css';
+
+type EducationEntry = {
+  key: string;
+  education_level: string;
+  institution_name: string;
+  field_of_study: string;
+  graduation_year: string;
+};
 
 type ProfileForm = {
   name: string;
@@ -27,15 +35,28 @@ type ProfileForm = {
   passport_number: string;
   cnic_number: string;
   information_category: InformationCategory | '';
-  education_level: string;
-  institution_name: string;
-  field_of_study: string;
-  graduation_year: string;
+  educations: EducationEntry[];
   job_title: string;
   employer_name: string;
   years_of_experience: string;
   other_information: string;
 };
+
+let educationKeySeq = 0;
+function nextEducationKey(): string {
+  educationKeySeq += 1;
+  return `edu-${educationKeySeq}`;
+}
+
+function emptyEducation(): EducationEntry {
+  return {
+    key: nextEducationKey(),
+    education_level: '',
+    institution_name: '',
+    field_of_study: '',
+    graduation_year: '',
+  };
+}
 
 const emptyForm: ProfileForm = {
   name: '',
@@ -49,10 +70,7 @@ const emptyForm: ProfileForm = {
   passport_number: '',
   cnic_number: '',
   information_category: '',
-  education_level: '',
-  institution_name: '',
-  field_of_study: '',
-  graduation_year: '',
+  educations: [emptyEducation()],
   job_title: '',
   employer_name: '',
   years_of_experience: '',
@@ -93,6 +111,25 @@ function documentTypeForEducationLevel(level: string): {
 }
 
 function toForm(profile: StudentProfile): ProfileForm {
+  const educations =
+    profile.educations && profile.educations.length > 0
+      ? profile.educations.map((entry) => ({
+          key: nextEducationKey(),
+          education_level: entry.education_level ?? '',
+          institution_name: entry.institution_name ?? '',
+          field_of_study: entry.field_of_study ?? '',
+          graduation_year: entry.graduation_year ?? '',
+        }))
+      : [
+          {
+            key: nextEducationKey(),
+            education_level: profile.education_level ?? '',
+            institution_name: profile.institution_name ?? '',
+            field_of_study: profile.field_of_study ?? '',
+            graduation_year: profile.graduation_year ?? '',
+          },
+        ];
+
   return {
     name: profile.name ?? '',
     phone: profile.phone ?? '',
@@ -105,10 +142,7 @@ function toForm(profile: StudentProfile): ProfileForm {
     passport_number: profile.passport_number ?? '',
     cnic_number: profile.cnic_number ?? '',
     information_category: profile.information_category ?? '',
-    education_level: profile.education_level ?? '',
-    institution_name: profile.institution_name ?? '',
-    field_of_study: profile.field_of_study ?? '',
-    graduation_year: profile.graduation_year ?? '',
+    educations,
     job_title: profile.job_title ?? '',
     employer_name: profile.employer_name ?? '',
     years_of_experience: profile.years_of_experience ?? '',
@@ -132,12 +166,12 @@ function personalFields(form: ProfileForm): string[] {
 }
 
 function educationFields(form: ProfileForm): string[] {
-  return [
-    form.education_level,
-    form.institution_name,
-    form.field_of_study,
-    form.graduation_year,
-  ];
+  return form.educations.flatMap((entry) => [
+    entry.education_level,
+    entry.institution_name,
+    entry.field_of_study,
+    entry.graduation_year,
+  ]);
 }
 
 function jobFields(form: ProfileForm): string[] {
@@ -171,11 +205,18 @@ function sectionPageTitle(section: ProfileSection): string {
   return 'Personal information';
 }
 
-/** Sections read as a wizard, so back steps to the section before it. */
+/** Sections read as a wizard, so back/forward step through them. */
 function previousSection(section: ProfileSection): ProfileSection | null {
   if (section === 'education') return 'personal';
   if (section === 'job') return 'education';
   if (section === 'other') return 'job';
+  return null;
+}
+
+function nextSection(section: ProfileSection): ProfileSection | null {
+  if (section === 'personal') return 'education';
+  if (section === 'education') return 'job';
+  if (section === 'job') return 'other';
   return null;
 }
 
@@ -189,7 +230,7 @@ function sectionProgress(form: ProfileForm, section: ProfileSection) {
   return { filled, total, complete, progressPct };
 }
 
-function validateForm(form: ProfileForm): string | null {
+function validatePersonal(form: ProfileForm): string | null {
   if (!form.name.trim()) return 'Full name is required.';
   if (!form.phone.trim()) return 'Phone is required.';
   if (!form.date_of_birth) return 'Date of birth is required.';
@@ -203,27 +244,59 @@ function validateForm(form: ProfileForm): string | null {
   if (!CNIC_PATTERN.test(form.cnic_number.trim())) {
     return 'Enter a valid CNIC number (e.g. 12345-1234567-1).';
   }
-
-  if (!form.education_level.trim()) return 'Education level is required.';
-  if (!form.institution_name.trim()) return 'Institution name is required.';
-  if (!form.field_of_study.trim()) return 'Field of study is required.';
-  if (!form.graduation_year.trim()) return 'Graduation year is required.';
-
-  if (!form.job_title.trim()) return 'Job title is required.';
-  if (!form.employer_name.trim()) return 'Employer name is required.';
-  if (!form.years_of_experience.trim()) return 'Years of experience is required.';
-
-  if (!form.other_information.trim()) return 'Please describe your other information.';
-
-  if (!form.information_category) {
-    return 'Open Education, Job, or Other from the dropdown after filling each section.';
-  }
-
   return null;
 }
 
+function validateEducation(form: ProfileForm): string | null {
+  if (form.educations.length === 0) return 'Add at least one education entry.';
+  for (let index = 0; index < form.educations.length; index += 1) {
+    const entry = form.educations[index];
+    const label = form.educations.length > 1 ? ` (entry ${index + 1})` : '';
+    if (!entry.education_level.trim()) return `Education level is required${label}.`;
+    if (!entry.institution_name.trim()) return `Institution name is required${label}.`;
+    if (!entry.field_of_study.trim()) return `Field of study is required${label}.`;
+    if (!entry.graduation_year.trim()) return `Graduation year is required${label}.`;
+  }
+  return null;
+}
+
+function validateJob(form: ProfileForm): string | null {
+  if (!form.job_title.trim()) return 'Job title is required.';
+  if (!form.employer_name.trim()) return 'Employer name is required.';
+  if (!form.years_of_experience.trim()) return 'Years of experience is required.';
+  return null;
+}
+
+function validateOther(form: ProfileForm): string | null {
+  if (!form.other_information.trim()) return 'Please describe your other information.';
+  return null;
+}
+
+function validateSection(form: ProfileForm, section: ProfileSection): string | null {
+  if (section === 'personal') return validatePersonal(form);
+  if (section === 'education') return validateEducation(form);
+  if (section === 'job') return validateJob(form);
+  return validateOther(form);
+}
+
+function validateForm(form: ProfileForm): string | null {
+  return (
+    validatePersonal(form) ||
+    validateEducation(form) ||
+    validateJob(form) ||
+    validateOther(form)
+  );
+}
+
 function toPayload(form: ProfileForm) {
-  const category = (form.information_category || 'education') as InformationCategory;
+  const category = (form.information_category || 'other') as InformationCategory;
+  const educations = form.educations.map((entry) => ({
+    education_level: entry.education_level.trim(),
+    institution_name: entry.institution_name.trim(),
+    field_of_study: entry.field_of_study.trim(),
+    graduation_year: entry.graduation_year.trim(),
+  }));
+  const primary = educations[0];
 
   return {
     name: form.name.trim(),
@@ -237,10 +310,11 @@ function toPayload(form: ProfileForm) {
     passport_number: form.passport_number.trim(),
     cnic_number: form.cnic_number.trim(),
     information_category: category,
-    education_level: form.education_level.trim(),
-    institution_name: form.institution_name.trim(),
-    field_of_study: form.field_of_study.trim(),
-    graduation_year: form.graduation_year.trim(),
+    educations,
+    education_level: primary?.education_level ?? '',
+    institution_name: primary?.institution_name ?? '',
+    field_of_study: primary?.field_of_study ?? '',
+    graduation_year: primary?.graduation_year ?? '',
     job_title: form.job_title.trim(),
     employer_name: form.employer_name.trim(),
     years_of_experience: form.years_of_experience.trim(),
@@ -261,11 +335,10 @@ export function StudentProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [passportFile, setPassportFile] = useState<File | null>(null);
   const [cnicFile, setCnicFile] = useState<File | null>(null);
-  const [educationFile, setEducationFile] = useState<File | null>(null);
+  const [educationFiles, setEducationFiles] = useState<Record<string, File | null>>({});
   const [documentError, setDocumentError] = useState<string | null>(null);
   const passportFileRef = useRef<HTMLInputElement>(null);
   const cnicFileRef = useRef<HTMLInputElement>(null);
-  const educationFileRef = useRef<HTMLInputElement>(null);
 
   const profileQuery = useQuery({
     queryKey: ['student-profile'],
@@ -293,31 +366,11 @@ export function StudentProfilePage() {
     [documentsQuery.data],
   );
 
-  const educationDocMeta = useMemo(
-    () => documentTypeForEducationLevel(form.education_level),
-    [form.education_level],
-  );
-
-  const existingEducationDoc = useMemo(() => {
-    if (!educationDocMeta || !documentsQuery.data) return null;
-    return (
-      documentsQuery.data.find((doc) => doc.type === educationDocMeta.type) ?? null
-    );
-  }, [documentsQuery.data, educationDocMeta]);
-
   useEffect(() => {
     if (profileQuery.data) {
       setForm(toForm(profileQuery.data));
     }
   }, [profileQuery.data]);
-
-  useEffect(() => {
-    setEducationFile(null);
-    setDocumentError(null);
-    if (educationFileRef.current) {
-      educationFileRef.current.value = '';
-    }
-  }, [form.education_level]);
 
   const cityOptions = useMemo(() => {
     const cities = citiesForCountry(form.country_of_residence);
@@ -354,14 +407,18 @@ export function StudentProfilePage() {
 
   const educationLevelOptions = useMemo(() => {
     const base = EDUCATION_LEVELS.map((level) => ({ value: level, label: level }));
-    if (
-      form.education_level &&
-      !EDUCATION_LEVELS.includes(form.education_level as EducationLevel)
-    ) {
-      return [...base, { value: form.education_level, label: form.education_level }];
-    }
-    return base;
-  }, [form.education_level]);
+    const extras = form.educations
+      .map((entry) => entry.education_level)
+      .filter(
+        (level) =>
+          level && !EDUCATION_LEVELS.includes(level as EducationLevel),
+      );
+    const uniqueExtras = [...new Set(extras)];
+    return [
+      ...base,
+      ...uniqueExtras.map((level) => ({ value: level, label: level })),
+    ];
+  }, [form.educations]);
 
   const countrySelectOptions = useMemo(() => {
     const base = COUNTRIES.map((country) => ({
@@ -404,16 +461,19 @@ export function StudentProfilePage() {
         );
       }
 
-      const educationMeta = documentTypeForEducationLevel(payload.education_level);
-      if (educationFile && educationMeta) {
-        uploads.push(
-          uploadStudentDocument({
-            type: educationMeta.type,
-            title: educationMeta.title,
-            file: educationFile,
-            existing: docs.find((doc) => doc.type === educationMeta.type) ?? null,
-          }),
-        );
+      for (const entry of payload.educations) {
+        const file = educationFiles[entry.key];
+        const educationMeta = documentTypeForEducationLevel(entry.education_level);
+        if (file && educationMeta) {
+          uploads.push(
+            uploadStudentDocument({
+              type: educationMeta.type,
+              title: educationMeta.title,
+              file,
+              existing: docs.find((doc) => doc.type === educationMeta.type) ?? null,
+            }),
+          );
+        }
       }
 
       await Promise.all(uploads);
@@ -429,10 +489,9 @@ export function StudentProfilePage() {
       setDocumentError(null);
       setPassportFile(null);
       setCnicFile(null);
-      setEducationFile(null);
+      setEducationFiles({});
       if (passportFileRef.current) passportFileRef.current.value = '';
       if (cnicFileRef.current) cnicFileRef.current.value = '';
-      if (educationFileRef.current) educationFileRef.current.value = '';
       setForm(toForm(profile));
       await queryClient.invalidateQueries({ queryKey: ['student-profile'] });
       await queryClient.invalidateQueries({ queryKey: ['student-documents'] });
@@ -468,8 +527,7 @@ export function StudentProfilePage() {
         setCnicFile(null);
         if (cnicFileRef.current) cnicFileRef.current.value = '';
       } else {
-        setEducationFile(null);
-        if (educationFileRef.current) educationFileRef.current.value = '';
+        setEducationFiles({});
       }
       await queryClient.invalidateQueries({ queryKey: ['student-documents'] });
       await queryClient.invalidateQueries({ queryKey: ['student-application-status'] });
@@ -507,34 +565,72 @@ export function StudentProfilePage() {
     }));
   }
 
+  function updateEducation(
+    key: string,
+    patch: Partial<Omit<EducationEntry, 'key'>>,
+  ) {
+    setForm((current) => ({
+      ...current,
+      educations: current.educations.map((entry) =>
+        entry.key === key ? { ...entry, ...patch } : entry,
+      ),
+    }));
+  }
+
+  function addEducation() {
+    setForm((current) => ({
+      ...current,
+      educations: [...current.educations, emptyEducation()],
+    }));
+    setError(null);
+  }
+
+  function removeEducation(key: string) {
+    setForm((current) => ({
+      ...current,
+      educations:
+        current.educations.length <= 1
+          ? current.educations
+          : current.educations.filter((entry) => entry.key !== key),
+    }));
+    setEducationFiles((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const validationError = validateForm(form);
-    if (validationError) {
-      setError(validationError);
-      if (
-        validationError.includes('Education') ||
-        validationError.includes('Institution') ||
-        validationError.includes('Field of study') ||
-        validationError.includes('Graduation')
-      ) {
-        setActiveSection('education');
-      } else if (
-        validationError.includes('Job') ||
-        validationError.includes('Employer') ||
-        validationError.includes('experience')
-      ) {
-        setActiveSection('job');
-      } else if (validationError.includes('other information')) {
-        setActiveSection('other');
-      } else if (validationError.includes('education, job, or other')) {
-        setActiveSection('education');
-      } else {
-        setActiveSection('personal');
-      }
+    setError(null);
+
+    const sectionError = validateSection(form, activeSection);
+    if (sectionError) {
+      setError(sectionError);
       return;
     }
-    saveProfile.mutate(form);
+
+    const upcoming = nextSection(activeSection);
+    if (upcoming) {
+      onSectionChange(upcoming);
+      return;
+    }
+
+    // Final section (Other): save everything and return to the dashboard.
+    const fullError = validateForm(form);
+    if (fullError) {
+      setError(fullError);
+      if (validatePersonal(form)) setActiveSection('personal');
+      else if (validateEducation(form)) setActiveSection('education');
+      else if (validateJob(form)) setActiveSection('job');
+      else setActiveSection('other');
+      return;
+    }
+
+    saveProfile.mutate({
+      ...form,
+      information_category: form.information_category || 'other',
+    });
   }
 
   const backSection = previousSection(activeSection);
@@ -547,9 +643,7 @@ export function StudentProfilePage() {
             label={`Back to ${sectionPageTitle(backSection).toLowerCase()}`}
             onClick={() => onSectionChange(backSection)}
           />
-        ) : (
-          <PageBackButton to={StudentRoutes.home} label="Back to dashboard" />
-        )}
+        ) : null}
         <SectionProgress
           loading={profileQuery.isLoading}
           title={
@@ -560,9 +654,7 @@ export function StudentProfilePage() {
           percent={progressPct}
         />
 
-        <PageSplit
-          main={
-            <section className="panel">
+        <section className="panel">
               <div className="profile-card-head">
                 <h2>Edit your details</h2>
                 <div className="profile-card-select">
@@ -825,103 +917,162 @@ export function StudentProfilePage() {
 
                 {activeSection === 'education' ? (
                   <>
-                    <label className="field">
-                      <span>
-                        Education level <span className="req">*</span>
-                      </span>
-                      <SearchableSelect
-                        value={form.education_level}
-                        options={educationLevelOptions}
-                        placeholder="Select"
-                        searchable={false}
-                        onChange={(value) => updateField('education_level', value)}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>
-                        Institution name <span className="req">*</span>
-                      </span>
-                      <input
-                        value={form.institution_name}
-                        onChange={(event) => updateField('institution_name', event.target.value)}
-                        placeholder="School or university"
-                        required
-                      />
-                    </label>
-                    <label className="field">
-                      <span>
-                        Field of study <span className="req">*</span>
-                      </span>
-                      <input
-                        value={form.field_of_study}
-                        onChange={(event) => updateField('field_of_study', event.target.value)}
-                        placeholder="e.g. Computer Science"
-                        required
-                      />
-                    </label>
-                    <label className="field">
-                      <span>
-                        Graduation year <span className="req">*</span>
-                      </span>
-                      <input
-                        value={form.graduation_year}
-                        onChange={(event) => updateField('graduation_year', event.target.value)}
-                        placeholder="e.g. 2024"
-                        required
-                      />
-                    </label>
+                    <div className="profile-education-list">
+                      {form.educations.map((entry, index) => {
+                        const educationDocMeta = documentTypeForEducationLevel(
+                          entry.education_level,
+                        );
+                        const existingEducationDoc = educationDocMeta
+                          ? (documentsQuery.data?.find(
+                              (doc) => doc.type === educationDocMeta.type,
+                            ) ?? null)
+                          : null;
+                        const educationFile = educationFiles[entry.key] ?? null;
 
-                    <div className="field education-doc-upload">
-                      <span>
-                        Upload {educationDocMeta?.title ?? 'education document'}
-                      </span>
-                      <p className="muted" style={{ margin: 0 }}>
-                        Saved uploads appear on your Documents page as pending for approval.
-                      </p>
-                      {existingEducationDoc ? (
-                        <p className="muted" style={{ margin: 0 }}>
-                          On file: {existingEducationDoc.original_name} (
-                          {existingEducationDoc.status_label})
-                        </p>
-                      ) : null}
-                      <input
-                        ref={educationFileRef}
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        disabled={
-                          !educationDocMeta || uploadDocument.isPending || saveProfile.isPending
-                        }
-                        onChange={(event) => {
-                          setDocumentError(null);
-                          setEducationFile(event.target.files?.[0] ?? null);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        disabled={
-                          !educationDocMeta ||
-                          !educationFile ||
-                          uploadDocument.isPending ||
-                          saveProfile.isPending
-                        }
-                        onClick={() => {
-                          if (!educationDocMeta || !educationFile) return;
-                          uploadDocument.mutate({
-                            type: educationDocMeta.type,
-                            title: educationDocMeta.title,
-                            file: educationFile,
-                          });
-                        }}>
-                        {uploadDocument.isPending
-                          ? 'Uploading…'
-                          : existingEducationDoc &&
-                              (existingEducationDoc.status === 'pending' ||
-                                existingEducationDoc.status === 'rejected')
-                            ? 'Replace document'
-                            : 'Upload document'}
-                      </button>
+                        return (
+                          <div key={entry.key} className="profile-education-card">
+                            <div className="profile-education-card-head">
+                              <h3>
+                                Education {form.educations.length > 1 ? index + 1 : ''}
+                              </h3>
+                              {form.educations.length > 1 ? (
+                                <button
+                                  type="button"
+                                  className="ghost-btn danger"
+                                  onClick={() => removeEducation(entry.key)}>
+                                  Remove
+                                </button>
+                              ) : null}
+                            </div>
+
+                            <label className="field">
+                              <span>
+                                Education level <span className="req">*</span>
+                              </span>
+                              <SearchableSelect
+                                value={entry.education_level}
+                                options={educationLevelOptions}
+                                placeholder="Select"
+                                searchable={false}
+                                onChange={(value) =>
+                                  updateEducation(entry.key, { education_level: value })
+                                }
+                              />
+                            </label>
+                            <label className="field">
+                              <span>
+                                Institution name <span className="req">*</span>
+                              </span>
+                              <input
+                                value={entry.institution_name}
+                                onChange={(event) =>
+                                  updateEducation(entry.key, {
+                                    institution_name: event.target.value,
+                                  })
+                                }
+                                placeholder="School or university"
+                                required
+                              />
+                            </label>
+                            <label className="field">
+                              <span>
+                                Field of study <span className="req">*</span>
+                              </span>
+                              <input
+                                value={entry.field_of_study}
+                                onChange={(event) =>
+                                  updateEducation(entry.key, {
+                                    field_of_study: event.target.value,
+                                  })
+                                }
+                                placeholder="e.g. Computer Science"
+                                required
+                              />
+                            </label>
+                            <label className="field">
+                              <span>
+                                Graduation year <span className="req">*</span>
+                              </span>
+                              <input
+                                value={entry.graduation_year}
+                                onChange={(event) =>
+                                  updateEducation(entry.key, {
+                                    graduation_year: event.target.value,
+                                  })
+                                }
+                                placeholder="e.g. 2024"
+                                required
+                              />
+                            </label>
+
+                            <div className="field education-doc-upload">
+                              <span>
+                                Upload {educationDocMeta?.title ?? 'education document'}
+                              </span>
+                              <p className="muted" style={{ margin: 0 }}>
+                                Saved uploads appear on your Documents page as pending for
+                                approval.
+                              </p>
+                              {existingEducationDoc ? (
+                                <p className="muted" style={{ margin: 0 }}>
+                                  On file: {existingEducationDoc.original_name} (
+                                  {existingEducationDoc.status_label})
+                                </p>
+                              ) : null}
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                disabled={
+                                  !educationDocMeta ||
+                                  uploadDocument.isPending ||
+                                  saveProfile.isPending
+                                }
+                                onChange={(event) => {
+                                  setDocumentError(null);
+                                  const file = event.target.files?.[0] ?? null;
+                                  setEducationFiles((current) => ({
+                                    ...current,
+                                    [entry.key]: file,
+                                  }));
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="ghost-btn"
+                                disabled={
+                                  !educationDocMeta ||
+                                  !educationFile ||
+                                  uploadDocument.isPending ||
+                                  saveProfile.isPending
+                                }
+                                onClick={() => {
+                                  if (!educationDocMeta || !educationFile) return;
+                                  uploadDocument.mutate({
+                                    type: educationDocMeta.type,
+                                    title: educationDocMeta.title,
+                                    file: educationFile,
+                                  });
+                                }}>
+                                {uploadDocument.isPending
+                                  ? 'Uploading…'
+                                  : existingEducationDoc &&
+                                      (existingEducationDoc.status === 'pending' ||
+                                        existingEducationDoc.status === 'rejected')
+                                    ? 'Replace document'
+                                    : 'Upload document'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    <button
+                      type="button"
+                      className="ghost-btn profile-education-add"
+                      onClick={addEducation}>
+                      + Add another education
+                    </button>
 
                     {documentError ? <p className="form-error">{documentError}</p> : null}
                   </>
@@ -989,25 +1140,15 @@ export function StudentProfilePage() {
                     saveProfile.isPending || uploadDocument.isPending || profileQuery.isLoading
                   }>
                   {saveProfile.isPending
-                    ? passportFile || cnicFile || educationFile
+                    ? passportFile || cnicFile || Object.values(educationFiles).some(Boolean)
                       ? 'Saving and uploading…'
                       : 'Saving…'
-                    : 'Save changes'}
+                    : activeSection === 'other'
+                      ? 'Save and go to dashboard'
+                      : 'Continue'}
                 </button>
               </form>
             </section>
-          }
-          side={
-            <PageTips
-              title="Why this matters"
-              items={[
-                'Use the dropdown to switch between personal, education, job, and other details.',
-                'Student Info uses these details on forms and letters.',
-                'Keep phone, passport, and CNIC accurate.',
-              ]}
-            />
-          }
-        />
       </div>
     </AppShell>
   );

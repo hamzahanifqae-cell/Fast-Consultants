@@ -27,6 +27,8 @@ type StudentScreenProps = {
   title?: string;
   subtitle?: string;
   showBack?: boolean;
+  /** Override default router.back() when showBack is true. */
+  onBackPress?: () => void;
   notifications?: boolean;
   showMenu?: boolean;
   onMenuPress?: () => void;
@@ -40,6 +42,7 @@ export function StudentScreen({
   title,
   subtitle,
   showBack = false,
+  onBackPress,
   notifications = true,
   showMenu = false,
   onMenuPress,
@@ -47,41 +50,41 @@ export function StudentScreen({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
-  // Keep header clear of the status bar, then add a little breathing room.
-  const topPadding =
-    Platform.OS === 'android'
-      ? Math.max(insets.top, androidStatusBar) + Spacing.three
-      : Spacing.three;
+  // Status-bar clearance only; header controls are vertically centered in the bar below.
+  const statusPad =
+    Platform.OS === 'android' ? Math.max(insets.top, androidStatusBar) : 0;
 
   const header = (
-    <View style={[styles.topBar, { paddingTop: topPadding }]}>
-      <View style={styles.topBarSide}>
-        {showBack ? (
-          <Pressable
-            onPress={() => router.back()}
-            style={[styles.circleBtn, { backgroundColor: theme.backgroundSelected }]}>
-            <ThemedText type="smallBold">←</ThemedText>
-          </Pressable>
-        ) : showMenu && onMenuPress ? (
-          <HeaderMenuButton onPress={onMenuPress} />
-        ) : (
-          <View style={styles.circleBtn} />
-        )}
-      </View>
-
-      {!showBack ? (
-        <View style={styles.headerBrandCenter} pointerEvents="none">
-          <BrandLogo size={32} style={styles.headerLogo} />
-          <ThemedText type="heading" style={styles.headerBrand} numberOfLines={1}>
-            Fast Consultants
-          </ThemedText>
+    <View style={[styles.topBar, { paddingTop: statusPad }]}>
+      <View style={styles.topBarInner}>
+        <View style={styles.topBarSide}>
+          {showBack ? (
+            <Pressable
+              onPress={() => (onBackPress ? onBackPress() : router.back())}
+              style={[styles.circleBtn, { backgroundColor: theme.backgroundSelected }]}>
+              <ThemedText type="smallBold">←</ThemedText>
+            </Pressable>
+          ) : showMenu && onMenuPress ? (
+            <HeaderMenuButton onPress={onMenuPress} />
+          ) : (
+            <View style={styles.circleBtn} />
+          )}
         </View>
-      ) : (
-        <View style={styles.headerBrandCenter} />
-      )}
 
-      <View style={styles.topBarSide}>
-        {notifications ? <StudentNotificationIcon /> : <View style={styles.circleBtn} />}
+        {!showBack ? (
+          <View style={styles.headerBrandCenter} pointerEvents="none">
+            <BrandLogo size={32} style={styles.headerLogo} />
+            <ThemedText type="heading" style={styles.headerBrand} numberOfLines={1}>
+              Fast Consultants
+            </ThemedText>
+          </View>
+        ) : (
+          <View style={styles.headerBrandCenter} />
+        )}
+
+        <View style={styles.topBarSide}>
+          {notifications ? <StudentNotificationIcon /> : <View style={styles.circleBtn} />}
+        </View>
       </View>
     </View>
   );
@@ -153,12 +156,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
+    width: '100%',
+  },
+  topBarInner: {
+    minHeight: 56,
     paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.two,
+    paddingVertical: Spacing.two,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 44,
   },
   topBarSide: {
     width: 44,
@@ -169,7 +175,7 @@ const styles = StyleSheet.create({
   },
   headerBrandCenter: {
     flex: 1,
-    minHeight: 44,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

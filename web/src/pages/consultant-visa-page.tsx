@@ -3,7 +3,6 @@ import { type FormEvent, useEffect, useState } from 'react';
 
 import { InterviewMeetingSection } from '@/components/interview-meeting-section';
 import { DepartmentStudentGate } from '@/components/department-student-gate';
-import { PageStats, PageTips } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
 import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
@@ -24,8 +23,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
   const shellBadge =
     focus === 'interview' ? 'Interview' : focus === 'visa' ? 'VISA' : 'Visa & Interview';
 
-  const { studentId, selected, selectStudent, clearStudent, studentsQuery } =
-    useDepartmentStudentParam();
+  const { studentId, selected, selectStudent, clearStudent } = useDepartmentStudentParam();
   const [prepTitle, setPrepTitle] = useState('');
   const [prepBody, setPrepBody] = useState('');
   const [interviewAt, setInterviewAt] = useState('');
@@ -64,8 +62,6 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
   const handoffQuery = useStudentHandoff(showInterview ? studentId : null);
   const interviewLock = handoffLockMessage(handoffQuery.data, 'interview');
 
-  const directoryCount = studentsQuery.data?.length ?? 0;
-  const appointmentCount = appointmentsQuery.data?.length ?? 0;
   const application = applicationQuery.data;
 
   useEffect(() => {
@@ -180,73 +176,6 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
           setError(null);
         }}>
         {error ? <p className="form-error">{error}</p> : null}
-
-        <PageStats
-          items={[
-            {
-              label: 'Students',
-              value: studentsQuery.isLoading ? '…' : directoryCount,
-              hint: 'In the shared directory',
-              icon: '🎓',
-              tone: 'purple',
-            },
-            ...(showInterview
-              ? [
-                  {
-                    label: 'Interview stage',
-                    value: applicationQuery.isLoading
-                      ? '…'
-                      : (application?.stage_label ?? 'Not started'),
-                    hint: application?.everything_accepted
-                      ? 'Docs & fees ready'
-                      : 'Waiting on checklist',
-                    icon: '🗓️',
-                    tone: 'coral' as const,
-                  },
-                ]
-              : []),
-            ...(showVisa
-              ? [
-                  {
-                    label: 'Visa appointments',
-                    value: appointmentsQuery.isLoading ? '…' : appointmentCount,
-                    hint: 'For this student',
-                    icon: '🛂',
-                    tone: 'gold' as const,
-                  },
-                ]
-              : []),
-            {
-              label: 'Selected student',
-              value: selected?.name?.split(' ')[0] ?? 'None',
-              hint: selected?.email ?? 'Pick a student to continue',
-              icon: '👤',
-              tone: 'blue' as const,
-            },
-          ]}
-        />
-        <PageTips
-          title={showInterview && !showVisa ? 'Interview tips' : showVisa && !showInterview ? 'Visa tips' : 'Tips'}
-          items={
-            showInterview && !showVisa
-              ? [
-                  'Unlock preparation only after documents and fees are accepted.',
-                  'Add clear prep notes so the student knows what to practice.',
-                  'Schedule interview time with mode and location or link.',
-                ]
-              : showVisa && !showInterview
-                ? [
-                    'Schedule embassy time with mode and location.',
-                    'Mark appointments completed or cancelled when status changes.',
-                    'Students see these appointments on My status.',
-                  ]
-                : [
-                    'Interview unlocks after documents and fees are accepted.',
-                    'Visa appointments appear on the student My status page.',
-                    'Keep notes short and actionable for the student.',
-                  ]
-          }
-        />
 
         <div className="org-layout">
           {showInterview ? (

@@ -7,6 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "educationconsultant",
     "userInterfaceStyle": "automatic",
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#F5F5F7",
+      "translucent": true
+    },
     "ios": {
       "bundleIdentifier": "com.fastconsultants.app",
       "icon": "./assets/images/icon.png",
@@ -32,7 +37,7 @@
         "MODIFY_AUDIO_SETTINGS"
       ],
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",

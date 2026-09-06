@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useMemo, useRef, useState } from 'react';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
-import { PageStats } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
 import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
@@ -15,7 +14,7 @@ import './dashboard.css';
 export function ConsultantFinancePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { studentId, selectStudent, clearStudent, studentsQuery } = useDepartmentStudentParam();
+  const { studentId, selectStudent, clearStudent } = useDepartmentStudentParam();
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -43,9 +42,6 @@ export function ConsultantFinancePage() {
     () => (receiptsQuery.data ?? []).filter((item) => item.status === 'awaiting_review'),
     [receiptsQuery.data],
   );
-  const directoryCount = studentsQuery.data?.length ?? 0;
-  const allSlips = receiptsQuery.data ?? [];
-  const approvedSlips = allSlips.filter((item) => item.status === 'approved').length;
 
   const createReceipt = useMutation({
     mutationFn: async () => {
@@ -126,39 +122,6 @@ export function ConsultantFinancePage() {
           setError(null);
         }}>
         {error ? <p className="form-error">{error}</p> : null}
-
-        <PageStats
-          items={[
-            {
-              label: 'Students',
-              value: studentsQuery.isLoading ? '…' : directoryCount,
-              hint: 'In the shared directory',
-              icon: '🎓',
-              tone: 'purple',
-            },
-            {
-              label: 'Awaiting review',
-              value: receiptsQuery.isLoading ? '…' : awaitingReview.length,
-              hint: 'Payment screenshots',
-              icon: '⏳',
-              tone: 'gold',
-            },
-            {
-              label: 'Approved',
-              value: receiptsQuery.isLoading ? '…' : approvedSlips,
-              hint: 'For this student',
-              icon: '✓',
-              tone: 'teal',
-            },
-            {
-              label: 'All slips',
-              value: receiptsQuery.isLoading ? '…' : allSlips.length,
-              hint: 'Sent to this student',
-              icon: '💳',
-              tone: 'blue',
-            },
-          ]}
-        />
 
         <div className="org-layout">
           <section className="panel">

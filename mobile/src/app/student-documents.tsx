@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import { Redirect } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -24,14 +24,19 @@ import type { DocumentType, StudentDocument } from '@/types/auth';
 type DocumentOption = {
   value: DocumentType;
   label: string;
+  required?: boolean;
   requirements: string[];
   titlePlaceholder: string;
 };
+
+/** Catch-all types may be uploaded more than once; everything else is one file per type. */
+const REPEATABLE_TYPES: DocumentType[] = ['other'];
 
 const DOCUMENT_TYPES: DocumentOption[] = [
   {
     value: 'passport',
     label: 'Passport',
+    required: true,
     titlePlaceholder: 'e.g. Passport bio page',
     requirements: [
       'Clear scan or photo of passport bio page',
@@ -42,6 +47,7 @@ const DOCUMENT_TYPES: DocumentOption[] = [
   {
     value: 'cnic',
     label: 'CNIC',
+    required: true,
     titlePlaceholder: 'e.g. CNIC front',
     requirements: [
       'Clear scan or photo of your CNIC',
@@ -52,6 +58,7 @@ const DOCUMENT_TYPES: DocumentOption[] = [
   {
     value: 'metric',
     label: 'Metric (Matric)',
+    required: true,
     titlePlaceholder: 'e.g. Matric certificate',
     requirements: [
       'Matric / SSC certificate or mark sheet',
@@ -62,6 +69,7 @@ const DOCUMENT_TYPES: DocumentOption[] = [
   {
     value: 'intermediate',
     label: 'Intermediate',
+    required: true,
     titlePlaceholder: 'e.g. Intermediate certificate',
     requirements: [
       'Intermediate / HSSC certificate or mark sheet',
@@ -72,6 +80,7 @@ const DOCUMENT_TYPES: DocumentOption[] = [
   {
     value: 'transcript',
     label: 'Transcript',
+    required: true,
     titlePlaceholder: 'e.g. University transcript',
     requirements: [
       'Official academic transcript',
@@ -157,11 +166,6 @@ export default function StudentDocumentsScreen() {
   const [pickedMime, setPickedMime] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedOption = useMemo(
-    () => DOCUMENT_TYPES.find((option) => option.value === documentType) ?? null,
-    [documentType],
-  );
-
   const documentsQuery = useQuery({
     queryKey: ['student-documents'],
     enabled: Boolean(token) && isStudent,
@@ -171,10 +175,53 @@ export default function StudentDocumentsScreen() {
     },
   });
 
+  const docs = documentsQuery.data ?? [];
+  const editingDoc = docs.find((doc) => doc.id === editingId) ?? null;
+
+  const uploadedByType = useMemo(() => {
+    const map = new Map<DocumentType, StudentDocument>();
+    docs.forEach((doc) => {
+      if (!map.has(doc.type)) map.set(doc.type, doc);
+    });
+    return map;
+  }, [docs]);
+
+  const typeOptions = useMemo(
+    () =>
+      DOCUMENT_TYPES.filter(
+        (item) =>
+          item.value === editingDoc?.type ||
+          REPEATABLE_TYPES.includes(item.value) ||
+          !uploadedByType.has(item.value),
+      ),
+    [uploadedByType, editingDoc],
+  );
+
+  useEffect(() => {
+    if (editingId) return;
+    if (!documentType) return;
+    if (typeOptions.some((option) => option.value === documentType)) return;
+    setDocumentType(typeOptions[0]?.value ?? null);
+  }, [typeOptions, documentType, editingId]);
+
+  const selectedOption = useMemo(
+    () => DOCUMENT_TYPES.find((option) => option.value === documentType) ?? null,
+    [documentType],
+  );
+
   const uploadDocument = useMutation({
     mutationFn: async () => {
       if (!documentType) {
         throw new Error('Please select a document type.');
+      }
+      if (
+        !editingId &&
+        !REPEATABLE_TYPES.includes(documentType) &&
+        uploadedByType.has(documentType)
+      ) {
+        throw new Error(
+          'You already uploaded this document type. Use Edit on that file instead of uploading again.',
+        );
       }
       if (!editingId && (!pickedUri || !pickedName)) {
         throw new Error('Please choose a file first.');
@@ -309,7 +356,11 @@ export default function StudentDocumentsScreen() {
             onPress={() => setDropdownOpen((open) => !open)}
             style={[styles.dropdown, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="small">
-              {selectedOption?.label ?? 'Select document type'}
+              {selectedOption
+                ? selectedOption.required
+                  ? `${selectedOption.label} *`
+                  : selectedOption.label
+                : 'Select document type'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {dropdownOpen ? '▲' : '▼'}
@@ -318,7 +369,7 @@ export default function StudentDocumentsScreen() {
 
           {dropdownOpen ? (
             <ThemedView style={[styles.dropdownMenu, { backgroundColor: theme.backgroundElement }]}>
-              {DOCUMENT_TYPES.map((option) => {
+              {typeOptions.map((option) => {
                 const selected = documentType === option.value;
                 return (
                   <Pressable
@@ -328,10 +379,17 @@ export default function StudentDocumentsScreen() {
                       styles.dropdownItem,
                       selected ? { backgroundColor: theme.backgroundSelected } : null,
                     ]}>
-                    <ThemedText type="small">{option.label}</ThemedText>
+                    <ThemedText type="small">
+                      {option.required ? `${option.label} *` : option.label}
+                    </ThemedText>
                   </Pressable>
                 );
               })}
+              {typeOptions.length === 0 ? (
+                <ThemedText type="small" themeColor="textSecondary" style={{ padding: 12 }}>
+                  All required types are uploaded. Edit an existing file, or choose Other.
+                </ThemedText>
+              ) : null}
             </ThemedView>
           ) : null}
 

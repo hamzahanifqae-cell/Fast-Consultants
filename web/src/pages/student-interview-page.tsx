@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { InterviewMeetingSection } from '@/components/interview-meeting-section';
-import { PageEmpty, PageSplit, PageTips, SectionProgress } from '@/components/page-fill';
+import { PageEmpty, SectionProgress } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { StudentRoutes } from '@/lib/department-routes';
@@ -150,9 +150,7 @@ export function StudentInterviewPage() {
           percent={progress.percent}
         />
 
-        <PageSplit
-          main={
-            <>
+        <>
               <section className="panel">
                 <h2>{preparation?.title ?? 'Preparation notes'}</h2>
                 {statusQuery.isLoading ? <p className="muted">Loading…</p> : null}
@@ -328,18 +326,6 @@ export function StudentInterviewPage() {
                 <Link to={StudentRoutes.status}>← Back to my status</Link>
               </p>
             </>
-          }
-          side={
-            <PageTips
-              title="How this works"
-              items={[
-                'Read preparation notes and mark complete when you are ready.',
-                'When staff schedule a meeting, the timer and video appear below.',
-                'After a meeting ends, choose whether you want another session.',
-              ]}
-            />
-          }
-        />
       </div>
     </AppShell>
   );

@@ -7,6 +7,7 @@ import { AppShell } from '@/components/shell';
 import { StudentProgressReport } from '@/components/student-progress-report';
 import { api } from '@/lib/api';
 import { departmentRoutes, StudentRoutes } from '@/lib/department-routes';
+import { welcomeRoleTitle, welcomeTimestamp, welcomeTitle } from '@/lib/greeting';
 import { isInterviewMeetingCancelled } from '@/lib/interview';
 import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
 import { orgPortalForUser } from '@/lib/portals';
@@ -22,11 +23,9 @@ import type {
   ApplicationStatusResponse,
   ChargeReceipt,
   ChatConversation,
-  OrganizationUser,
   StudentDocument,
   StudentProfile,
   StudentSummary,
-  University,
   UserNotification,
   VisaAppointment,
 } from '@/types/auth';
@@ -360,22 +359,22 @@ function formatWhen(value: string | null | undefined) {
 export function HomePage() {
   const user = useAuthStore((state) => state.user);
   const isTeam = isOrganizationUser(user);
-  const firstName = user?.name?.split(' ')[0] ?? 'there';
+  const displayName = user?.name ?? null;
   const orgPortal = orgPortalForUser(user);
   const routes = departmentRoutes(orgPortal);
 
   if (isSuperAdminUser(user)) {
-    return <SuperAdminHome firstName={firstName} routes={routes} />;
+    return <SuperAdminHome routes={routes} />;
   }
 
   if (isTeam) {
-    return <StaffHome firstName={firstName} routes={routes} />;
+    return <StaffHome routes={routes} />;
   }
 
-  return <StudentHome firstName={firstName} />;
+  return <StudentHome displayName={displayName} />;
 }
 
-function StudentHome({ firstName }: { firstName: string }) {
+function StudentHome({ displayName }: { displayName: string | null }) {
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
 
@@ -597,7 +596,8 @@ function StudentHome({ firstName }: { firstName: string }) {
   return (
     <AppShell
       badge="Student"
-      title={`Welcome back, ${firstName}`}>
+      title={welcomeTitle(displayName)}
+      subtitle={welcomeTimestamp()}>
       <div className="page-stack">
         <div className="dash-hero-row">
           <div className="next-step-card dash-hero-main">
@@ -764,10 +764,8 @@ function StudentHome({ firstName }: { firstName: string }) {
 }
 
 function SuperAdminHome({
-  firstName,
   routes,
 }: {
-  firstName: string;
   routes: ReturnType<typeof departmentRoutes>;
 }) {
   const [inboxStudentId, setInboxStudentId] = useState<number | null>(null);
@@ -778,22 +776,6 @@ function SuperAdminHome({
       const { data } = await api.get<{ data: StudentProgressRow[] }>(
         '/consultant/students/progress',
       );
-      return data.data;
-    },
-  });
-
-  const teamQuery = useQuery({
-    queryKey: ['organization-users'],
-    queryFn: async () => {
-      const { data } = await api.get<{ data: OrganizationUser[] }>('/organization/users');
-      return data.data;
-    },
-  });
-
-  const universitiesQuery = useQuery({
-    queryKey: ['consultant-universities'],
-    queryFn: async () => {
-      const { data } = await api.get<{ data: University[] }>('/consultant/universities');
       return data.data;
     },
   });
@@ -827,20 +809,11 @@ function SuperAdminHome({
   });
 
   const students = studentsQuery.data ?? [];
-  const team = teamQuery.data ?? [];
-  const universities = universitiesQuery.data ?? [];
   const conversations = messagesQuery.data?.data ?? [];
   const documents = documentsQuery.data ?? [];
   const pendingDocs = documents.filter((d) => d.status === 'pending').length;
   const unreadMessages = messagesQuery.data?.unread_count ?? 0;
   const unreadNotices = notificationsQuery.data?.unread_count ?? 0;
-  const avgProgress =
-    students.length === 0
-      ? 0
-      : Math.round(
-          students.reduce((sum, student) => sum + student.overall_percent, 0) / students.length,
-        );
-  const onTrack = students.filter((student) => student.overall_percent >= 50).length;
   const inboxStudent = students.find((student) => student.id === inboxStudentId) ?? null;
   const inboxConversations = useMemo(() => {
     if (!inboxStudentId) return conversations;
@@ -850,7 +823,8 @@ function SuperAdminHome({
   return (
     <AppShell
       badge="Super Admin"
-      title={`Welcome back, ${firstName}`}>
+      title={welcomeRoleTitle('Super Admin')}
+      subtitle={welcomeTimestamp()}>
       <div className="page-stack">
         <StudentProgressReport
           students={students}
@@ -859,43 +833,6 @@ function SuperAdminHome({
           viewAllHref={routes.studentInfo.students}
           onSelectedStudentChange={setInboxStudentId}
         />
-
-        <div className="dash-metric-grid">
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon purple">🎓</span>
-            <span className="dash-metric-label">Students</span>
-            <strong className="dash-metric-value">
-              {studentsQuery.isLoading ? '…' : students.length}
-            </strong>
-            <span className="dash-metric-hint">Registered accounts</span>
-          </div>
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon coral">📈</span>
-            <span className="dash-metric-label">Avg progress</span>
-            <strong className="dash-metric-value">
-              {studentsQuery.isLoading ? '…' : `${avgProgress}%`}
-            </strong>
-            <span className="dash-metric-hint">
-              {onTrack} of {students.length || 0} at 50%+
-            </span>
-          </div>
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon blue">👥</span>
-            <span className="dash-metric-label">Team</span>
-            <strong className="dash-metric-value">
-              {teamQuery.isLoading ? '…' : team.length}
-            </strong>
-            <span className="dash-metric-hint">Admin & staff</span>
-          </div>
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon gold">🏫</span>
-            <span className="dash-metric-label">Universities</span>
-            <strong className="dash-metric-value">
-              {universitiesQuery.isLoading ? '…' : universities.length}
-            </strong>
-            <span className="dash-metric-hint">Catalog options</span>
-          </div>
-        </div>
 
         <div className="dash-quick-actions dash-quick-actions-row">
           <Link className="dash-quick-card" to={routes.studentInfo.students}>
@@ -1012,10 +949,8 @@ function SuperAdminHome({
 }
 
 function StaffHome({
-  firstName,
   routes,
 }: {
-  firstName: string;
   routes: ReturnType<typeof departmentRoutes>;
 }) {
   const user = useAuthStore((state) => state.user);
@@ -1039,15 +974,6 @@ function StaffHome({
     },
   });
 
-  const receiptsQuery = useQuery({
-    queryKey: ['consultant-charge-receipts-overview'],
-    enabled: showFinance,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ChargeReceipt[] }>('/consultant/charge-receipts');
-      return data.data;
-    },
-  });
-
   const messagesQuery = useQuery({
     queryKey: ['chat-conversations'],
     queryFn: async () => {
@@ -1059,81 +985,15 @@ function StaffHome({
   });
 
   const conversations = messagesQuery.data?.data ?? [];
-  const studentCount = studentsQuery.data?.length ?? 0;
   const students = studentsQuery.data ?? [];
-  const totalUnread = messagesQuery.data?.unread_count ?? 0;
-  const awaitingReview = (receiptsQuery.data ?? []).filter(
-    (receipt) => receipt.status === 'awaiting_review',
-  ).length;
-  const departmentCount = [
-    showStudents,
-    showUniversities,
-    showFinance,
-    showInterview,
-    showVisa,
-  ].filter(Boolean).length;
   const roleLabel = organizationRoleLabel(user);
 
   return (
     <AppShell
       badge={roleLabel}
-      title={`Hello, ${firstName}`}>
+      title={welcomeRoleTitle('Staff')}
+      subtitle={welcomeTimestamp()}>
       <div className="page-stack">
-        <div className="dash-metric-grid">
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon purple">🎓</span>
-            <span className="dash-metric-label">Students</span>
-            <strong className="dash-metric-value">
-              {worksWithStudents
-                ? studentsQuery.isLoading
-                  ? '…'
-                  : studentCount
-                : 'None'}
-            </strong>
-            <span className="dash-metric-hint">
-              {worksWithStudents ? 'In the shared directory' : 'Not assigned to student work'}
-            </span>
-          </div>
-
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon lilac">💬</span>
-            <span className="dash-metric-label">Messages</span>
-            <strong className="dash-metric-value">
-              {messagesQuery.isLoading ? '…' : conversations.length}
-            </strong>
-            <span className="dash-metric-hint">
-              {totalUnread ? `${totalUnread} unread` : 'Department threads'}
-            </span>
-          </div>
-
-          {showFinance ? (
-            <div className="dash-metric panel">
-              <span className="dash-metric-icon gold">💳</span>
-              <span className="dash-metric-label">Awaiting review</span>
-              <strong className="dash-metric-value">
-                {receiptsQuery.isLoading ? '…' : awaitingReview}
-              </strong>
-              <span className="dash-metric-hint">Payment screenshots to check</span>
-            </div>
-          ) : (
-            <div className="dash-metric panel">
-              <span className="dash-metric-icon blue">📁</span>
-              <span className="dash-metric-label">Departments</span>
-              <strong className="dash-metric-value">{departmentCount || 1}</strong>
-              <span className="dash-metric-hint">Assigned to your account</span>
-            </div>
-          )}
-
-          <div className="dash-metric panel">
-            <span className="dash-metric-icon coral">👤</span>
-            <span className="dash-metric-label">Your desk</span>
-            <strong className="dash-metric-value" style={{ fontSize: '1.25rem' }}>
-              {roleLabel}
-            </strong>
-            <span className="dash-metric-hint">Open tools from the sidebar</span>
-          </div>
-        </div>
-
         <PageSplit
           main={
             <PageSection

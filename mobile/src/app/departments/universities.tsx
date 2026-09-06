@@ -1,3 +1,3 @@
-import Screen from '../consultant-universities';
+import Screen from '../consultant-universities-department';
 
 export default Screen;

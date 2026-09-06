@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
+import { welcomeRoleTitle, welcomeTimestamp } from '@/lib/greeting';
 import type { StudentProgressRow } from '@/lib/student-progress';
 import { useChatUiStore } from '@/stores/chat-ui-store';
 import type {
@@ -36,37 +37,6 @@ function initials(name: string | null | undefined) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  hint,
-  tint,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  hint?: string;
-  tint: string;
-}) {
-  return (
-    <StudentSurface style={styles.metric}>
-      <View style={[styles.metricIcon, { backgroundColor: tint }]}>
-        <ThemedText>{icon}</ThemedText>
-      </View>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="subtitle">{value}</ThemedText>
-      {hint ? (
-        <ThemedText type="caption" themeColor="textSecondary">
-          {hint}
-        </ThemedText>
-      ) : null}
-    </StudentSurface>
-  );
 }
 
 export function SuperAdminHome({ user, token, onLogout }: Props) {
@@ -144,20 +114,11 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
   const pendingDocs = documents.filter((doc) => doc.status === 'pending').length;
   const unreadMessages = messagesQuery.data?.unread_count ?? 0;
   const unreadNotices = notificationsQuery.data?.unread_count ?? 0;
-  const avgProgress =
-    students.length === 0
-      ? 0
-      : Math.round(
-          students.reduce((sum, student) => sum + student.overall_percent, 0) / students.length,
-        );
-  const onTrack = students.filter((student) => student.overall_percent >= 50).length;
   const inboxStudent = students.find((student) => student.id === inboxStudentId) ?? null;
   const inboxConversations = useMemo(() => {
     if (!inboxStudentId) return conversations;
     return conversations.filter((conversation) => conversation.other_user.id === inboxStudentId);
   }, [conversations, inboxStudentId]);
-
-  const firstName = user.name.split(' ')[0] ?? user.name;
 
   async function onRefresh() {
     setRefreshing(true);
@@ -246,7 +207,8 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
     { emoji: '🎓', label: 'All students', onPress: () => router.push('/consultant-students') },
     { emoji: '📄', label: 'Documents', onPress: () => router.push('/departments/documents') },
     { emoji: '💳', label: 'Finance', onPress: () => router.push('/departments/finance') },
-    { emoji: '🏫', label: 'Universities', onPress: () => router.push('/departments/universities') },
+    { emoji: '🏫', label: 'Universities', onPress: () => router.push('/consultant-universities') },
+    { emoji: '📚', label: 'Catalog', onPress: () => router.push('/consultant-universities-catalog') },
     { emoji: '🎤', label: 'Interview', onPress: () => router.push('/departments/interview') },
     { emoji: '🛂', label: 'Visa', onPress: () => router.push('/departments/visa') },
     { emoji: '👥', label: 'Team & access', onPress: () => router.push('/departments/team') },
@@ -267,44 +229,13 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
         }
         showMenu
-        title={`Welcome back, ${firstName}`}>
-        <View style={[styles.badge, { backgroundColor: theme.cardLime }]}>
-          <ThemedText type="smallBold">Super Admin</ThemedText>
-        </View>
-
+        title={welcomeRoleTitle('Super Admin')}
+        subtitle={welcomeTimestamp()}>
         <StudentProgressReport
           loading={studentsQuery.isLoading}
           onSelectedStudentChange={setInboxStudentId}
           students={students}
         />
-
-        <View style={styles.metricGrid}>
-          <MetricCard
-            icon="🎓"
-            label="Students"
-            tint={theme.cardLime}
-            value={studentsQuery.isLoading ? '…' : String(students.length)}
-          />
-          <MetricCard
-            hint={`${onTrack} of ${students.length || 0} at 50%+`}
-            icon="📈"
-            label="Avg progress"
-            tint={theme.cardCoral}
-            value={studentsQuery.isLoading ? '…' : `${avgProgress}%`}
-          />
-          <MetricCard
-            icon="👥"
-            label="Team"
-            tint={theme.cardTeal}
-            value={teamQuery.isLoading ? '…' : String(team.length)}
-          />
-          <MetricCard
-            icon="🏫"
-            label="Universities"
-            tint={theme.cardGold}
-            value={universitiesQuery.isLoading ? '…' : String(universities.length)}
-          />
-        </View>
 
         <View style={styles.section}>
           <ThemedText type="section" themeColor="textSecondary">
@@ -400,29 +331,6 @@ const styles = StyleSheet.create({
   },
   screenPad: {
     paddingBottom: Spacing.five,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  metric: {
-    width: '48%',
-    flexGrow: 1,
-    gap: 6,
-  },
-  metricIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   section: {
     gap: Spacing.two,

@@ -12,7 +12,7 @@ export function PageEmpty({ title, body, actionLabel, actionTo }: EmptyProps) {
   return (
     <div className="page-empty panel">
       <div className="page-empty-mark" aria-hidden>
-        ···
+        FC
       </div>
       <h2>{title}</h2>
       {body ? <p>{body}</p> : null}
@@ -35,42 +35,6 @@ export function PageSplit({ main, side }: SplitProps) {
     <div className="page-split">
       <div className="page-split-main">{main}</div>
       <aside className="page-split-side">{side}</aside>
-    </div>
-  );
-}
-
-type TipProps = {
-  title: string;
-  items: string[];
-};
-
-export function PageTips(_props: TipProps) {
-  return null;
-}
-
-export type PageStatTone = 'purple' | 'blue' | 'gold' | 'coral' | 'teal' | 'lilac';
-
-export type PageStatItem = {
-  label: string;
-  value: string | number;
-  hint?: string;
-  icon?: string;
-  tone?: PageStatTone;
-};
-
-export function PageStats({ items }: { items: PageStatItem[] }) {
-  return (
-    <div className={`dash-metric-grid${items.length === 3 ? ' dash-metric-grid-3' : ''}`}>
-      {items.map((item) => (
-        <div key={item.label} className="dash-metric panel">
-          {item.icon ? (
-            <span className={`dash-metric-icon ${item.tone ?? 'purple'}`}>{item.icon}</span>
-          ) : null}
-          <span className="dash-metric-label">{item.label}</span>
-          <strong className="dash-metric-value">{item.value}</strong>
-          {item.hint ? <span className="dash-metric-hint">{item.hint}</span> : null}
-        </div>
-      ))}
     </div>
   );
 }

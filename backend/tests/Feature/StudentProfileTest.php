@@ -36,6 +36,12 @@ class StudentProfileTest extends TestCase
             'passport_number' => 'AB123456',
             'cnic_number' => '35202-1234567-1',
             'information_category' => 'education',
+            'educations' => [[
+                'education_level' => "Bachelor's",
+                'institution_name' => 'Punjab University',
+                'field_of_study' => 'Business',
+                'graduation_year' => '2024',
+            ]],
             'education_level' => "Bachelor's",
             'institution_name' => 'Punjab University',
             'field_of_study' => 'Business',
@@ -128,10 +134,7 @@ class StudentProfileTest extends TestCase
                 'passport_number',
                 'cnic_number',
                 'information_category',
-                'education_level',
-                'institution_name',
-                'field_of_study',
-                'graduation_year',
+                'educations',
                 'job_title',
                 'employer_name',
                 'years_of_experience',
@@ -147,6 +150,12 @@ class StudentProfileTest extends TestCase
         Sanctum::actingAs($student);
 
         $this->putJson('/api/student/profile', $this->completeProfilePayload([
+            'educations' => [[
+                'education_level' => null,
+                'institution_name' => null,
+                'field_of_study' => null,
+                'graduation_year' => null,
+            ]],
             'education_level' => null,
             'institution_name' => null,
             'field_of_study' => null,
@@ -158,15 +167,47 @@ class StudentProfileTest extends TestCase
         ]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors([
-                'education_level',
-                'institution_name',
-                'field_of_study',
-                'graduation_year',
+                'educations.0.education_level',
+                'educations.0.institution_name',
+                'educations.0.field_of_study',
+                'educations.0.graduation_year',
                 'job_title',
                 'employer_name',
                 'years_of_experience',
                 'other_information',
             ]);
+    }
+
+    public function test_a_student_can_save_multiple_education_entries(): void
+    {
+        $student = User::factory()->student()->create();
+        $student->studentProfile()->create();
+
+        Sanctum::actingAs($student);
+
+        $this->putJson('/api/student/profile', $this->completeProfilePayload([
+            'educations' => [
+                [
+                    'education_level' => 'Matric',
+                    'institution_name' => 'City School',
+                    'field_of_study' => 'Science',
+                    'graduation_year' => '2018',
+                ],
+                [
+                    'education_level' => "Bachelor's",
+                    'institution_name' => 'Punjab University',
+                    'field_of_study' => 'Business',
+                    'graduation_year' => '2024',
+                ],
+            ],
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.education_level', 'Matric')
+            ->assertJsonPath('data.institution_name', 'City School')
+            ->assertJsonCount(2, 'data.educations')
+            ->assertJsonPath('data.educations.1.institution_name', 'Punjab University');
+
+        $this->assertDatabaseCount('student_educations', 2);
     }
 
     public function test_a_consultant_cannot_access_student_profile(): void

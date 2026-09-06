@@ -4,10 +4,10 @@ import { StyleSheet, View } from 'react-native';
 import { StudentScreen } from '@/components/student/student-screen';
 import { StudentStackCards } from '@/components/student/student-stack-card';
 import { useTheme } from '@/hooks/use-theme';
-import { useAuthStore } from '@/stores/auth-store';
 import { isOrganizationUser } from '@/lib/roles';
+import { useAuthStore } from '@/stores/auth-store';
 
-export default function ConsultantFinanceDepartmentScreen() {
+export default function ConsultantUniversitiesDepartmentScreen() {
   const theme = useTheme();
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
@@ -23,17 +23,24 @@ export default function ConsultantFinanceDepartmentScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <StudentScreen showBack title="Finance Department">
+      <StudentScreen showBack title="Universities">
         <StudentStackCards
           items={[
             {
-              title: 'Charge slips',
-              description:
-                'Send consultancy and university fee slips, then review payment screenshots.',
-              color: theme.cardGold,
-              glyph: '💳',
-              actionLabel: 'Manage',
-              onPress: () => router.push('/consultant-charge-receipts'),
+              title: 'Catalog',
+              description: 'Add and manage university options in the master list.',
+              color: theme.cardTeal,
+              glyph: 'UN',
+              actionLabel: 'Open',
+              onPress: () => router.push('/consultant-universities-catalog'),
+            },
+            {
+              title: 'Share with students',
+              description: 'Assign catalog options to a student from the directory.',
+              color: theme.cardCoral,
+              glyph: 'SH',
+              actionLabel: 'Share',
+              onPress: () => router.push('/consultant-universities'),
             },
           ]}
         />

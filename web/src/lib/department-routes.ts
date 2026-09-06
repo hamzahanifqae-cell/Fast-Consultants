@@ -19,6 +19,8 @@ export function departmentRoutes(portal: Exclude<Portal, 'student'>) {
     },
     universities: {
       root: `${base}/departments/universities`,
+      catalog: `${base}/departments/universities/catalog`,
+      share: `${base}/departments/universities/share`,
     },
     finance: {
       root: `${base}/departments/finance`,
@@ -89,6 +91,8 @@ export function mapNotificationAction(
     '/departments/student-info/documents': routes.documents.root,
     '/departments/documents': routes.documents.root,
     '/departments/universities': routes.universities.root,
+    '/departments/universities/catalog': routes.universities.catalog,
+    '/departments/universities/share': routes.universities.share,
     '/departments/finance': routes.finance.root,
     '/departments/interview': routes.interview.root,
     '/departments/visa': routes.visa.root,

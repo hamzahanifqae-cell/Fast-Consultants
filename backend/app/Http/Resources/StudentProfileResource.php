@@ -16,6 +16,20 @@ class StudentProfileResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $educations = $this->relationLoaded('educations')
+            ? $this->educations
+            : $this->educations()->get();
+
+        if ($educations->isEmpty() && filled($this->education_level)) {
+            $educations = collect([(object) [
+                'id' => null,
+                'education_level' => $this->education_level,
+                'institution_name' => $this->institution_name,
+                'field_of_study' => $this->field_of_study,
+                'graduation_year' => $this->graduation_year,
+            ]]);
+        }
+
         return [
             'name' => $this->user?->name,
             'email' => $this->user?->email,
@@ -33,6 +47,15 @@ class StudentProfileResource extends JsonResource
             'institution_name' => $this->institution_name,
             'field_of_study' => $this->field_of_study,
             'graduation_year' => $this->graduation_year,
+            'educations' => $educations->values()->map(function ($education) {
+                return [
+                    'id' => $education->id ?? null,
+                    'education_level' => $education->education_level,
+                    'institution_name' => $education->institution_name,
+                    'field_of_study' => $education->field_of_study,
+                    'graduation_year' => $education->graduation_year,
+                ];
+            })->all(),
             'job_title' => $this->job_title,
             'employer_name' => $this->employer_name,
             'years_of_experience' => $this->years_of_experience,

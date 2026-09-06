@@ -10,6 +10,7 @@ import { ConsultantDocumentsPage } from '@/pages/consultant-documents-page';
 import { ConsultantFinancePage } from '@/pages/consultant-finance-page';
 import { ConsultantStudentDetailPage } from '@/pages/consultant-student-detail-page';
 import { ConsultantStudentsPage } from '@/pages/consultant-students-page';
+import { ConsultantUniversitiesCatalogPage } from '@/pages/consultant-universities-catalog-page';
 import { ConsultantUniversitiesPage } from '@/pages/consultant-universities-page';
 import { ConsultantVisaPage } from '@/pages/consultant-visa-page';
 import { HomePage } from '@/pages/home-page';
@@ -27,6 +28,7 @@ import { StudentProfilePage } from '@/pages/student-profile-page';
 import { StudentStatusPage } from '@/pages/student-status-page';
 import { StudentUniversitiesPage } from '@/pages/student-universities-page';
 import { StudentVisaAppointmentsPage } from '@/pages/student-visa-appointments-page';
+import { UniversitiesDepartmentPage } from '@/pages/universities-department-page';
 import { departmentRoutes } from '@/lib/department-routes';
 import {
   homeForPortal,
@@ -98,7 +100,12 @@ export default function App() {
                 element={<Navigate to="/superadmin/departments/documents" replace />}
               />
               <Route path="departments/documents" element={<ConsultantDocumentsPage />} />
-              <Route path="departments/universities" element={<ConsultantUniversitiesPage />} />
+              <Route path="departments/universities" element={<UniversitiesDepartmentPage />} />
+              <Route
+                path="departments/universities/catalog"
+                element={<ConsultantUniversitiesCatalogPage />}
+              />
+              <Route path="departments/universities/share" element={<ConsultantUniversitiesPage />} />
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />
@@ -126,7 +133,12 @@ export default function App() {
                 element={<Navigate to="/staff/departments/documents" replace />}
               />
               <Route path="departments/documents" element={<ConsultantDocumentsPage />} />
-              <Route path="departments/universities" element={<ConsultantUniversitiesPage />} />
+              <Route path="departments/universities" element={<UniversitiesDepartmentPage />} />
+              <Route
+                path="departments/universities/catalog"
+                element={<ConsultantUniversitiesCatalogPage />}
+              />
+              <Route path="departments/universities/share" element={<ConsultantUniversitiesPage />} />
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />

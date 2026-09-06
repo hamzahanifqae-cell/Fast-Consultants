@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { compareSearchMatch, optionMatchesQuery } from '@/lib/option-search';
+
 import './searchable-select.css';
 
 export type SearchableOption = {
@@ -44,13 +46,11 @@ export function SearchableSelect({
   const selected = options.find((option) => option.value === value) ?? null;
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     if (!needle) return options;
-    return options.filter(
-      (option) =>
-        option.label.toLowerCase().includes(needle) ||
-        option.value.toLowerCase().includes(needle),
-    );
+    return options
+      .filter((option) => optionMatchesQuery(option, needle))
+      .sort((a, b) => compareSearchMatch(a, b, needle));
   }, [options, query]);
 
   useEffect(() => {
@@ -151,8 +151,12 @@ export function SearchableSelect({
                 ref={searchRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
                 aria-label={searchPlaceholder}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
           ) : null}

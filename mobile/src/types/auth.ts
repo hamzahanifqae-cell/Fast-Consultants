@@ -31,6 +31,14 @@ export type Department = {
 
 export type InformationCategory = 'education' | 'job' | 'other';
 
+export type StudentEducation = {
+  id?: number | null;
+  education_level: string;
+  institution_name: string;
+  field_of_study: string;
+  graduation_year: string;
+};
+
 export type StudentProfile = {
   name: string;
   email: string;
@@ -48,6 +56,7 @@ export type StudentProfile = {
   institution_name: string | null;
   field_of_study: string | null;
   graduation_year: string | null;
+  educations?: StudentEducation[];
   job_title: string | null;
   employer_name: string | null;
   years_of_experience: string | null;
@@ -232,12 +241,19 @@ export type StudentApplication = {
   updated_at: string | null;
 };
 
+export type ApplicationHandoff = {
+  documents_approved: boolean;
+  universities_shared: boolean;
+  fees_cleared: boolean;
+};
+
 export type ApplicationStatusResponse = {
   application: StudentApplication;
   checklist: {
     documents: ApplicationChecklistItem;
     charge_receipts: ApplicationChecklistItem;
   };
+  handoff: ApplicationHandoff;
   preparation_available: boolean;
   interview_available: boolean;
   current_status: string;
