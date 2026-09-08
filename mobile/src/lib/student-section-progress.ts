@@ -1,3 +1,4 @@
+import { areDocumentsJourneyComplete } from '@/lib/student-journey-progress';
 import type {
   ApplicationStatusResponse,
   ChargeReceipt,
@@ -90,13 +91,30 @@ export function profileSectionProgress(profile: StudentProfile | undefined): Sec
   };
 }
 
-export function documentsSectionProgress(docs: StudentDocument[]): SectionProgress {
+export function documentsSectionProgress(
+  docs: StudentDocument[],
+  universities: University[] = [],
+): SectionProgress {
   const total = docs.length;
   const approved = docs.filter((doc) => doc.status === 'approved').length;
   const pending = docs.filter((doc) => doc.status === 'pending').length;
   const rejected = docs.filter((doc) => doc.status === 'rejected').length;
 
-  if (total === 0) {
+  const requiredTypes = Array.from(
+    new Set(
+      universities.flatMap((university) =>
+        (university.required_documents ?? []).map((doc) => doc.type),
+      ),
+    ),
+  );
+  const approvedTypes = new Set(
+    docs.filter((doc) => doc.status === 'approved').map((doc) => doc.type),
+  );
+  const uniCovered = requiredTypes.filter((type) => approvedTypes.has(type)).length;
+  const uniRequired = requiredTypes.length;
+  const uniComplete = uniRequired === 0 || uniCovered >= uniRequired;
+
+  if (total === 0 && uniRequired === 0) {
     return {
       percent: 0,
       report: 'Upload, Review, Approved',
@@ -106,21 +124,49 @@ export function documentsSectionProgress(docs: StudentDocument[]): SectionProgre
     };
   }
 
-  const percent =
+  if (total === 0 && uniRequired > 0) {
+    return {
+      percent: 0,
+      report: `0/${uniRequired} university docs ready`,
+      complete: false,
+      meta: 'University documents needed',
+      actionLabel: 'Upload docs',
+    };
+  }
+
+  const uploadPercent =
     rejected > 0
       ? Math.round((approved / total) * 100)
       : pending > 0
         ? Math.round(((approved + pending * 0.5) / total) * 100)
         : 100;
 
-  const complete = approved === total && rejected === 0 && pending === 0;
+  const uploadsComplete = approved === total && rejected === 0 && pending === 0;
+  const uniPercent = uniRequired === 0 ? 100 : Math.round((uniCovered / uniRequired) * 100);
+  const percent = uniRequired === 0 ? uploadPercent : Math.round((uploadPercent + uniPercent) / 2);
+  const complete = uploadsComplete && uniComplete;
+
+  let report = `Approved ${approved}, Pending ${pending}, Rejected ${rejected}`;
+  if (uniRequired > 0) {
+    report += `, University ${uniCovered}/${uniRequired}`;
+  }
 
   return {
     percent,
     complete,
-    report: `Approved ${approved}, Pending ${pending}, Rejected ${rejected}`,
-    meta: complete ? 'Documents complete' : 'Document review',
-    actionLabel: complete ? 'Review' : rejected > 0 ? 'Fix uploads' : 'Continue',
+    report,
+    meta: !uniComplete
+      ? 'University documents needed'
+      : complete
+        ? 'Documents complete'
+        : 'Document review',
+    actionLabel: !uniComplete
+      ? 'Upload docs'
+      : complete
+        ? 'Review'
+        : rejected > 0
+          ? 'Fix uploads'
+          : 'Continue',
   };
 }
 
@@ -284,7 +330,7 @@ export function visaSectionProgress(appointments: VisaAppointment[]): SectionPro
     percent,
     complete,
     report: `Scheduled ${scheduled}, Completed ${completed}`,
-    meta: complete ? 'Visa complete' : 'Visa appointments',
+    meta: complete ? 'File Making complete' : 'File Making appointments',
     actionLabel: complete ? 'Review' : 'View',
   };
 }
@@ -296,7 +342,7 @@ export function statusSectionProgress(
   if (!status) {
     return {
       percent: 0,
-      report: 'Docs, Fees, Interview, Visa',
+      report: 'Docs, Fees, Interview, File Making',
       complete: false,
       meta: 'Getting started',
       actionLabel: 'Open checklist',
@@ -312,12 +358,12 @@ export function statusSectionProgress(
       interview.followup_preference === 'decline_another');
 
   const steps = [
-    { label: 'Docs', done: status.checklist.documents.accepted },
+    { label: 'Docs', done: areDocumentsJourneyComplete(status) },
     { label: 'Fees', done: status.checklist.charge_receipts.accepted },
     { label: 'Prep', done: Boolean(status.application.preparation.completed_at) },
     { label: 'Interview', done: interviewDone || Boolean(interview.at) },
     {
-      label: 'Visa',
+      label: 'File Making',
       done: appointments.some((item) => item.status === 'completed' || item.status === 'scheduled'),
     },
   ];

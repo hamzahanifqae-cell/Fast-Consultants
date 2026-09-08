@@ -35,6 +35,14 @@ export default function ConsultantUniversitiesDepartmentScreen() {
               onPress: () => router.push('/consultant-universities-catalog'),
             },
             {
+              title: 'Student suggestions',
+              description: 'Review universities students suggested by country.',
+              color: theme.cardGold,
+              glyph: 'SU',
+              actionLabel: 'Review',
+              onPress: () => router.push('/consultant-university-suggestions'),
+            },
+            {
               title: 'Share with students',
               description: 'Assign catalog options to a student from the directory.',
               color: theme.cardCoral,

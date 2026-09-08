@@ -10,9 +10,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'conversation_id',
     'sender_id',
     'body',
+    'attachment_path',
+    'attachment_original_name',
+    'attachment_mime_type',
+    'attachment_size',
 ])]
 class ChatMessage extends Model
 {
+    public function hasAttachment(): bool
+    {
+        return filled($this->attachment_path);
+    }
+
     /**
      * @return BelongsTo<ChatConversation, $this>
      */

@@ -17,6 +17,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { StudentNotificationIcon } from '@/components/student/student-notification-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
 
 type StudentScreenProps = {
@@ -49,6 +50,7 @@ export function StudentScreen({
 }: StudentScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const bottomPad = useBottomSafeInset(16);
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
   // Status-bar clearance only; header controls are vertically centered in the bar below.
   const statusPad =
@@ -104,7 +106,7 @@ export function StudentScreen({
   const body = scroll ? (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[styles.content, contentStyle]}
+      contentContainerStyle={[styles.content, contentStyle, { paddingBottom: Spacing.five + bottomPad }]}
       refreshControl={refreshControl}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}>
@@ -112,7 +114,13 @@ export function StudentScreen({
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, styles.flex, contentStyle]}>
+    <View
+      style={[
+        styles.content,
+        styles.flex,
+        contentStyle,
+        { paddingBottom: Spacing.five + bottomPad },
+      ]}>
       {pageTitle}
       {children}
     </View>

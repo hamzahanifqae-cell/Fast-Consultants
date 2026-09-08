@@ -30,4 +30,5 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('interview:send-reminders')->everyMinute();
+        $schedule->command('chat:send-scheduled')->everyMinute();
     })->create();

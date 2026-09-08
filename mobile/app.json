@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fast Consultants",
-    "slug": "education-consultant",
+    "slug": "hamza-hanif",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -36,8 +36,7 @@
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS"
       ],
-      "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -73,9 +72,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "39de5643-0d0b-4fb6-8e13-63802bb8e5d9"
+        "projectId": "3a39d52c-7a5d-4a88-ad77-ed7d685ac97d"
       }
     },
-    "owner": "abubakar-lodhi"
+    "owner": "hamzahanifs-team"
   }
 }

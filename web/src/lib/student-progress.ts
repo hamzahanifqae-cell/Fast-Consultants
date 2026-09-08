@@ -33,7 +33,7 @@ export const STUDENT_PROGRESS_SECTIONS: Array<{
   { key: 'universities', label: 'Universities', color: '#C1F2D0' },
   { key: 'fees', label: 'Fees', color: '#E0D7FF' },
   { key: 'interview', label: 'Interview', color: '#FFD6E8' },
-  { key: 'visa', label: 'Visa', color: '#E0D7FF' },
+  { key: 'visa', label: 'File Making', color: '#E0D7FF' },
   { key: 'status', label: 'Status', color: '#FFF3C1' },
 ];
 
@@ -44,7 +44,7 @@ export const STUDENT_PROGRESS_BREAKDOWNS: Record<StudentSectionKey, readonly str
   fees: ['Waiting', 'Pay', 'Approved'],
   interview: ['Locked', 'Prep', 'Meeting'],
   visa: ['Waiting', 'Scheduled', 'Completed'],
-  status: ['Docs', 'Fees', 'Prep', 'Interview', 'Visa'],
+  status: ['Docs', 'Fees', 'Prep', 'Interview', 'File Making'],
 };
 
 type Rgb = { r: number; g: number; b: number };

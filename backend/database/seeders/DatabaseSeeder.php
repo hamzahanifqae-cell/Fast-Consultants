@@ -101,7 +101,7 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        foreach (['Student Department', 'Finance Department', 'Visa Department'] as $name) {
+        foreach (['Student Department', 'Finance Department', 'File Making Department'] as $name) {
             Department::query()->firstOrCreate(
                 [
                     'consultant_id' => $consultant->id,

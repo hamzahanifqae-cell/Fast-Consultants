@@ -9,10 +9,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
+import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { compareSearchMatch, optionMatchesQuery } from '@/lib/option-search';
 
@@ -44,7 +45,8 @@ export function SelectSheet({
   onSelect,
 }: SelectSheetProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
+  const bottomPad = useBottomSafeInset(Spacing.three);
+  const keyboardInset = useKeyboardBottomInset();
   const { height: windowHeight } = useWindowDimensions();
   const [query, setQuery] = useState('');
 
@@ -60,9 +62,9 @@ export function SelectSheet({
       .sort((a, b) => compareSearchMatch(a, b, needle));
   }, [options, query]);
 
-  // Window height already shrinks when Android keyboard opens (resize mode),
-  // so size the list from that — do not also add keyboard margin (that jammed the sheet to the top).
-  const listMaxHeight = Math.max(140, Math.min(360, windowHeight * 0.42));
+  // adjustNothing: lift Modal sheet; clamp so it never jams into the status bar.
+  const sheetLift = keyboardInset > 40 ? Math.min(keyboardInset, Math.floor(windowHeight * 0.48)) : 0;
+  const listMaxHeight = Math.max(120, Math.min(300, (windowHeight - sheetLift) * 0.38));
 
   function close() {
     setQuery('');
@@ -84,7 +86,8 @@ export function SelectSheet({
             styles.sheet,
             {
               backgroundColor: theme.background,
-              paddingBottom: Math.max(insets.bottom, Spacing.three),
+              paddingBottom: sheetLift > 0 ? Spacing.two : bottomPad,
+              marginBottom: sheetLift,
             },
           ]}>
           <View style={styles.header}>
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {

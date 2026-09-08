@@ -49,12 +49,12 @@ class UniversityTest extends TestCase
         ]);
     }
 
-    public function test_students_only_see_visible_universities_and_their_required_documents(): void
+    public function test_students_can_browse_by_country_and_suggest_universities(): void
     {
         $consultant = User::factory()->consultant()->create();
         $student = User::factory()->student()->create();
 
-        $visible = University::query()->create([
+        $ukVisible = University::query()->create([
             'consultant_id' => $consultant->id,
             'name' => 'Visible Uni',
             'country' => 'UK',
@@ -62,14 +62,23 @@ class UniversityTest extends TestCase
             'description' => null,
             'is_visible_to_students' => true,
         ]);
-        $visible->requiredDocuments()->create(['document_type' => 'passport']);
-        $visible->requiredDocuments()->create(['document_type' => 'metric']);
+        $ukVisible->requiredDocuments()->create(['document_type' => 'passport']);
+        $ukVisible->requiredDocuments()->create(['document_type' => 'metric']);
+
+        University::query()->create([
+            'consultant_id' => $consultant->id,
+            'name' => 'Canada Uni',
+            'country' => 'Canada',
+            'city' => 'Toronto',
+            'description' => null,
+            'is_visible_to_students' => true,
+        ]);
 
         $hidden = University::query()->create([
             'consultant_id' => $consultant->id,
             'name' => 'Hidden Uni',
-            'country' => 'USA',
-            'city' => 'Boston',
+            'country' => 'UK',
+            'city' => 'Manchester',
             'description' => null,
             'is_visible_to_students' => false,
         ]);
@@ -79,12 +88,51 @@ class UniversityTest extends TestCase
 
         $this->getJson('/api/student/universities')
             ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson('/api/student/universities/countries')
+            ->assertOk()
+            ->assertJsonFragment(['Canada'])
+            ->assertJsonFragment(['UK']);
+
+        $this->getJson('/api/student/universities/catalog?country=UK')
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Visible Uni'])
+            ->assertJsonFragment(['name' => 'University of Oxford']);
+
+        $this->postJson('/api/student/universities', [
+            'university_ids' => [$ukVisible->id, $hidden->id],
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/student/universities', [
+            'university_ids' => [$ukVisible->id],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('added', 1)
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.name', 'Visible Uni')
-            ->assertJsonCount(2, 'data.0.required_documents')
-            ->assertJsonFragment(['type' => 'passport', 'label' => 'Passport'])
-            ->assertJsonFragment(['type' => 'metric', 'label' => 'Metric (Matric)']);
+            ->assertJsonPath('data.0.selection_source', 'student_selected');
+
+        $this->getJson('/api/student/universities')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.selection_source', 'student_selected');
+
+        $this->assertDatabaseHas('student_university', [
+            'student_id' => $student->id,
+            'university_id' => $ukVisible->id,
+            'source' => 'student_selected',
+        ]);
+
+        $this->deleteJson("/api/student/universities/{$ukVisible->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('student_university', [
+            'student_id' => $student->id,
+            'university_id' => $ukVisible->id,
+        ]);
     }
+
 
     public function test_a_student_cannot_create_universities(): void
     {

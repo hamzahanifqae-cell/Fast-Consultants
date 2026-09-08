@@ -105,7 +105,7 @@ export default function ConsultantVisaAppointmentsScreen() {
   return (
     <StudentScreen
       showBack
-      title="Visa appointments">
+      title="File Making appointments">
       {appointmentsQuery.isLoading ? <ActivityIndicator /> : null}
 
       {(appointmentsQuery.data ?? []).map((appointment) => (

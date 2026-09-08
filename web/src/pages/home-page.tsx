@@ -115,6 +115,38 @@ function currentStudentStep(
     };
   }
 
+  const urgentDocs = status.checklist?.urgent_documents;
+  if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) {
+    const missingNames = urgentDocs.missing
+      .filter((item) => item.status === 'missing' || item.status === 'rejected')
+      .map((item) => item.label);
+    const pendingNames = urgentDocs.missing
+      .filter((item) => item.status === 'pending')
+      .map((item) => item.label);
+
+    if (missingNames.length > 0) {
+      return {
+        title: 'Urgent documents',
+        body:
+          missingNames.length <= 3
+            ? `Staff needs these urgently: ${missingNames.join(', ')}. Upload them on Documents.`
+            : `${missingNames.length} urgent documents still need to be uploaded.`,
+        to: StudentRoutes.documents,
+        label: 'Go to documents',
+      };
+    }
+
+    return {
+      title: 'Urgent documents under review',
+      body:
+        pendingNames.length > 0
+          ? `Waiting for staff to approve: ${pendingNames.slice(0, 3).join(', ')}${pendingNames.length > 3 ? '…' : ''}.`
+          : 'Staff are reviewing your urgent document uploads.',
+      to: StudentRoutes.documents,
+      label: 'View documents',
+    };
+  }
+
   const docs = status.checklist?.documents;
   if (!docs?.accepted) {
     if ((docs?.total ?? 0) === 0) {
@@ -136,6 +168,38 @@ function currentStudentStep(
     return {
       title: 'Documents under review',
       body: 'Staff are checking your uploads. This step stays active until every file is approved.',
+      to: StudentRoutes.documents,
+      label: 'View documents',
+    };
+  }
+
+  const universityDocs = status.checklist?.university_documents;
+  if (universityDocs && universityDocs.required > 0 && !universityDocs.complete) {
+    const missingNames = universityDocs.missing
+      .filter((item) => item.status === 'missing' || item.status === 'rejected')
+      .map((item) => item.label);
+    const pendingNames = universityDocs.missing
+      .filter((item) => item.status === 'pending')
+      .map((item) => item.label);
+
+    if (missingNames.length > 0) {
+      return {
+        title: 'Upload university-required documents',
+        body:
+          missingNames.length <= 3
+            ? `Your universities still need: ${missingNames.join(', ')}. Upload these to continue.`
+            : `${missingNames.length} documents are still needed for your university options.`,
+        to: StudentRoutes.documents,
+        label: 'Go to documents',
+      };
+    }
+
+    return {
+      title: 'University documents under review',
+      body:
+        pendingNames.length > 0
+          ? `Waiting for staff to approve: ${pendingNames.slice(0, 3).join(', ')}${pendingNames.length > 3 ? '…' : ''}.`
+          : 'University staff are reviewing your remaining required documents.',
       to: StudentRoutes.documents,
       label: 'View documents',
     };
@@ -253,24 +317,24 @@ function currentStudentStep(
     const scheduled = appointments.filter((item) => item.status === 'scheduled');
     if (scheduled.length > 0) {
       return {
-        title: 'Attend your visa appointment',
-        body: 'Visa staff shared your embassy appointment. Check the details and prepare for the visit.',
+        title: 'Attend your File Making appointment',
+        body: 'File Making staff shared your embassy appointment. Check the details and prepare for the visit.',
         to: StudentRoutes.visaAppointments,
-        label: 'Open visa appointments',
+        label: 'Open File Making appointments',
       };
     }
 
     return {
-      title: 'Waiting for visa appointment',
-      body: 'Interview is finished. Visa staff will schedule your embassy appointment next.',
+      title: 'Waiting for File Making appointment',
+      body: 'Interview is finished. File Making staff will schedule your embassy appointment next.',
       to: StudentRoutes.visaAppointments,
-      label: 'Open visa appointments',
+      label: 'Open File Making appointments',
     };
   }
 
   return {
     title: 'All current steps complete',
-    body: 'Interview and visa appointment are done. Message your consultant anytime if you need support.',
+    body: 'Interview and File Making appointment are done. Message your consultant anytime if you need support.',
     to: StudentRoutes.status,
     label: 'View status',
     done: true,
@@ -292,8 +356,20 @@ function studentProgressSteps(
     },
     {
       id: 'documents',
-      label: 'Documents',
-      done: Boolean(status?.checklist?.documents?.accepted),
+      label:
+        status?.checklist?.urgent_documents &&
+        status.checklist.urgent_documents.required > 0 &&
+        !status.checklist.urgent_documents.complete
+          ? 'Urgent docs'
+          : 'Documents',
+      done: Boolean(
+        status?.checklist?.documents?.accepted &&
+          (!status.checklist.urgent_documents ||
+            status.checklist.urgent_documents.complete) &&
+          (!status.checklist.university_documents ||
+            status.checklist.university_documents.required === 0 ||
+            status.checklist.university_documents.complete),
+      ),
       color: '#60a5fa',
     },
     {
@@ -316,7 +392,7 @@ function studentProgressSteps(
     },
     {
       id: 'visa',
-      label: 'Visa',
+      label: 'File Making',
       done: isVisaJourneyComplete(appointments),
       color: '#f24e68',
     },
@@ -472,7 +548,7 @@ function StudentHome({ displayName }: { displayName: string | null }) {
   const recentActivity = (() => {
     const items: RecentActivityItem[] = [];
 
-    // Same order as journey steps: Profile → Documents → Fees → Interview → Visa
+    // Same order as journey steps: Profile → Documents → Fees → Interview → File Making
     if (isProfileComplete(profile)) {
       items.push({
         kind: 'step',
@@ -552,7 +628,7 @@ function StudentHome({ displayName }: { displayName: string | null }) {
       items.push({
         kind: 'step',
         id: 'step-visa',
-        title: 'Visa appointment',
+        title: 'File Making appointment',
         body: `${completedCount} appointment${completedCount === 1 ? '' : 's'} completed`,
         tone: 'ok',
         badge: 'Completed',
@@ -577,7 +653,7 @@ function StudentHome({ displayName }: { displayName: string | null }) {
             : progressSteps[currentProgressIndex]?.id === 'visa'
               ? appointments.find((a) => a.status === 'scheduled')
                 ? formatWhen(appointments.find((a) => a.status === 'scheduled')?.scheduled_at)
-                : 'Waiting for Visa staff'
+                : 'Waiting for File Making staff'
               : null,
       };
 
@@ -925,7 +1001,7 @@ function SuperAdminHome({
                 </Link>
                 <Link className="workspace-link" to={routes.visa.root}>
                   <div>
-                    <strong>Visa</strong>
+                    <strong>File Making</strong>
                     <span>Embassy appointments</span>
                   </div>
                   <span className="workspace-link-meta">Open</span>
@@ -1124,7 +1200,7 @@ function StaffHome({
                   {showVisa ? (
                     <Link className="workspace-link" to={routes.visa.root}>
                       <div>
-                        <strong>Visa</strong>
+                        <strong>File Making</strong>
                         <span>Embassy appointments</span>
                       </div>
                       <span className="workspace-link-meta">Open</span>

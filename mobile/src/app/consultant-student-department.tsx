@@ -44,6 +44,14 @@ export default function ConsultantStudentDepartmentScreen() {
             actionLabel: 'Open',
             onPress: () => router.push('/departments/documents'),
           },
+          {
+            title: 'Form templates',
+            description: 'Send the fixed Sponsorship letter for students to fill in-app.',
+            color: theme.cardGold,
+            glyph: '📝',
+            actionLabel: 'Open',
+            onPress: () => router.push('/departments/form-templates'),
+          },
         ]
       : []),
   ];

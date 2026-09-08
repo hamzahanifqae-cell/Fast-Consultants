@@ -107,6 +107,15 @@ export function StudentInfoDepartmentPage() {
                     <span className="workspace-link-meta">Open</span>
                   </Link>
                 ) : null}
+                {showStudents ? (
+                  <Link className="workspace-link" to={routes.formTemplates.root}>
+                    <div>
+                      <strong>Form templates</strong>
+                      <span>Send the fixed Sponsorship letter</span>
+                    </div>
+                    <span className="workspace-link-meta">Open</span>
+                  </Link>
+                ) : null}
               </div>
             </PageSection>
           }

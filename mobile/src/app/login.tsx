@@ -2,8 +2,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Brand } from '@/constants/theme';
 import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
 import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { api, getApiErrorMessage } from '@/lib/api';
@@ -52,6 +51,7 @@ export default function LoginScreen() {
   const keyboardInset = useKeyboardBottomInset();
   const keyboardVisible = keyboardInset > 40;
   const topInset = useAuthTopInset();
+  const bottomPad = useBottomSafeInset(24);
   const theme = useTheme();
   useAuthStatusBar();
 
@@ -96,7 +96,6 @@ export default function LoginScreen() {
     <View style={styles.screen}>
       <AuthBackground />
 
-      {/* Fixed back button below status bar */}
       <View style={[styles.topChrome, { paddingTop: topInset }]}>
         <Pressable
           accessibilityLabel="Back to role selection"
@@ -107,9 +106,19 @@ export default function LoginScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.body, { paddingTop: topInset + 52 }]}>
+      {/*
+        Content-hugging sheet + paddingBottom = keyboard height.
+        Never flex-expand the sheet (that created the huge white gap and
+        parked Sign In under the keyboard).
+      */}
+      <View
+        style={[
+          styles.body,
+          {
+            paddingTop: topInset + 52,
+            paddingBottom: keyboardVisible ? keyboardInset : 0,
+          },
+        ]}>
         {!keyboardVisible ? (
           <View style={styles.heroCopy}>
             <BrandLogo size={40} />
@@ -123,18 +132,18 @@ export default function LoginScreen() {
                   : 'Staff and Admin sign in only.'}
             </Text>
           </View>
-        ) : (
-          <View style={styles.heroFlex} />
-        )}
+        ) : null}
 
-        {/* Sheet hugs content — no flex:1 stretch / empty white void */}
         <View style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
           <ScrollView
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}
-            contentContainerStyle={styles.form}>
+            contentContainerStyle={[
+              styles.form,
+              { paddingBottom: keyboardVisible ? 12 : 12 + bottomPad },
+            ]}>
             <View style={styles.switchRow}>
               {isStudent ? (
                 <View style={styles.switchCopy}>
@@ -192,10 +201,13 @@ export default function LoginScreen() {
               </ThemedText>
             ) : null}
 
-            <ThemedText type="link" style={styles.forgot}>
-              Forgot password?
-            </ThemedText>
+            {!keyboardVisible ? (
+              <ThemedText type="link" style={styles.forgot}>
+                Forgot password?
+              </ThemedText>
+            ) : null}
 
+            {/* CTA sits directly under password (8px gap) — never in a flex spacer */}
             <Pressable
               accessibilityLabel="Sign In"
               accessibilityRole="button"
@@ -221,7 +233,7 @@ export default function LoginScreen() {
             ) : null}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -264,9 +276,6 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: 14,
   },
-  heroFlex: {
-    flex: 1,
-  },
   roleTag: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
@@ -294,11 +303,10 @@ const styles = StyleSheet.create({
   form: {
     paddingHorizontal: 24,
     paddingTop: 18,
-    paddingBottom: 22,
-    gap: 10,
+    gap: 8,
   },
   switchRow: {
-    marginBottom: 0,
+    marginBottom: 2,
   },
   switchCopy: {
     gap: 2,
@@ -335,13 +343,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 0,
-    marginBottom: 2,
   },
   ctaWrap: {
     borderRadius: 16,
     overflow: 'hidden',
-    marginTop: 2,
+    marginTop: 0,
   },
   cta: {
     minHeight: 50,
@@ -355,6 +361,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   themeBlock: {
-    marginTop: 8,
+    marginTop: 4,
   },
 });

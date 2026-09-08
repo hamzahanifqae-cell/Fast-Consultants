@@ -3,7 +3,7 @@ import { Redirect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { DocumentPreviewModal } from '@/components/document-preview-modal';
@@ -14,7 +14,20 @@ import { useTheme } from '@/hooks/use-theme';
 import { API_URL, api, getApiErrorMessage } from '@/lib/api';
 import { isOrganizationUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
-import type { StudentDocument, StudentSummary } from '@/types/auth';
+import type { DocumentType, StudentDocument, StudentSummary, UrgentDocumentRequest } from '@/types/auth';
+
+const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'cnic', label: 'CNIC' },
+  { value: 'metric', label: 'Matric' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'transcript', label: 'Transcript' },
+  { value: 'degree_certificate', label: 'Degree certificate' },
+  { value: 'diploma', label: 'Diploma' },
+  { value: 'english_test', label: 'IELTS score' },
+  { value: 'recommendation_letter', label: 'Recommendation letter' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function ConsultantDocumentsScreen() {
   const theme = useTheme();
@@ -26,6 +39,7 @@ export default function ConsultantDocumentsScreen() {
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<number | null>(null);
+  const [urgentTypes, setUrgentTypes] = useState<DocumentType[]>([]);
   const [preview, setPreview] = useState<{
     title: string;
     uri: string;
@@ -45,7 +59,20 @@ export default function ConsultantDocumentsScreen() {
     },
   });
 
+  const urgentQuery = useQuery({
+    queryKey: ['consultant-urgent-documents', studentId],
+    enabled: Boolean(token) && isConsultant && Boolean(studentId),
+    queryFn: async () => {
+      const { data } = await api.get<{ data: UrgentDocumentRequest[] }>(
+        '/consultant/urgent-documents',
+        { params: { student_id: studentId, open_only: 1 } },
+      );
+      return data.data;
+    },
+  });
+
   const docs = documentsQuery.data ?? [];
+  const openUrgent = urgentQuery.data ?? [];
   const pendingDocuments = useMemo(
     () => docs.filter((document) => document.status === 'pending'),
     [docs],
@@ -53,6 +80,10 @@ export default function ConsultantDocumentsScreen() {
   const approvedDocuments = useMemo(
     () => docs.filter((document) => document.status === 'approved'),
     [docs],
+  );
+  const openUrgentTypes = useMemo(
+    () => new Set(openUrgent.map((item) => item.document_type)),
+    [openUrgent],
   );
 
   const updateDocumentStatus = useMutation({
@@ -73,13 +104,54 @@ export default function ConsultantDocumentsScreen() {
     },
     onSuccess: async () => {
       setReviewError(null);
-      await queryClient.invalidateQueries({ queryKey: ['consultant-documents', studentId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['consultant-documents', studentId] }),
+        queryClient.invalidateQueries({ queryKey: ['consultant-urgent-documents', studentId] }),
+      ]);
     },
     onError: (err) => {
       setReviewError(getApiErrorMessage(err, 'Could not update document status.'));
     },
   });
 
+  const requestUrgent = useMutation({
+    mutationFn: async () => {
+      await api.post('/consultant/urgent-documents', {
+        student_id: studentId,
+        document_types: urgentTypes,
+      });
+    },
+    onSuccess: async () => {
+      setReviewError(null);
+      setUrgentTypes([]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['consultant-documents', studentId] }),
+        queryClient.invalidateQueries({ queryKey: ['consultant-urgent-documents', studentId] }),
+      ]);
+    },
+    onError: (err) => {
+      setReviewError(getApiErrorMessage(err, 'Could not request urgent documents.'));
+    },
+  });
+
+  const resolveUrgent = useMutation({
+    mutationFn: async (id: number) => {
+      await api.post(`/consultant/urgent-documents/${id}/resolve`);
+    },
+    onSuccess: async () => {
+      setReviewError(null);
+      await queryClient.invalidateQueries({ queryKey: ['consultant-urgent-documents', studentId] });
+    },
+    onError: (err) => {
+      setReviewError(getApiErrorMessage(err, 'Could not clear urgent request.'));
+    },
+  });
+
+  function toggleUrgentType(type: DocumentType) {
+    setUrgentTypes((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
+    );
+  }
   async function shareDownloadedFile(
     uri: string,
     options: { title: string; mimeType?: string | null },
@@ -168,13 +240,80 @@ export default function ConsultantDocumentsScreen() {
       <DepartmentStudentGate
         selectedId={studentId}
         onSelect={setSelected}
-        onClear={() => setSelected(null)}>
+        onClear={() => {
+          setSelected(null);
+          setUrgentTypes([]);
+          setReviewError(null);
+        }}>
         <StudentSurface style={{ backgroundColor: theme.backgroundElement }}>
           {reviewError ? (
             <ThemedText type="small" style={styles.error}>
               {reviewError}
             </ThemedText>
           ) : null}
+
+          <ThemedText type="subtitle">Request urgent documents</ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Student status returns to Documents and shows Urgent documents until these are approved.
+          </ThemedText>
+          {openUrgent.map((item) => (
+            <View
+              key={item.id}
+              style={[styles.reviewItem, { backgroundColor: theme.inputFill, marginTop: Spacing.two }]}>
+              <ThemedText type="smallBold">{item.document_type_label}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {item.note || 'Open urgent request'}
+              </ThemedText>
+              <Pressable
+                disabled={resolveUrgent.isPending}
+                onPress={() => resolveUrgent.mutate(item.id)}
+                style={[styles.button, styles.view]}>
+                <ThemedText type="smallBold" style={styles.buttonText}>
+                  Clear request
+                </ThemedText>
+              </Pressable>
+            </View>
+          ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}>
+            {DOCUMENT_TYPES.map((item) => {
+              const selectedType = urgentTypes.includes(item.value);
+              const alreadyOpen = openUrgentTypes.has(item.value);
+              return (
+                <Pressable
+                  key={item.value}
+                  onPress={() => toggleUrgentType(item.value)}
+                  style={[
+                    styles.chip,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: selectedType || alreadyOpen ? theme.cardGold : theme.background,
+                    },
+                  ]}>
+                  <ThemedText type="caption" style={{ fontWeight: '700' }}>
+                    {item.label}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {alreadyOpen ? 'Requested' : selectedType ? 'Selected' : 'Select'}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Pressable
+            disabled={requestUrgent.isPending || urgentTypes.length === 0}
+            onPress={() => requestUrgent.mutate()}
+            style={[
+              styles.button,
+              styles.approve,
+              { opacity: requestUrgent.isPending || urgentTypes.length === 0 ? 0.55 : 1 },
+            ]}>
+            <ThemedText type="smallBold" style={styles.buttonText}>
+              {requestUrgent.isPending ? 'Requesting…' : 'Send urgent request'}
+            </ThemedText>
+          </Pressable>
 
           {approvedDocuments.length ? (
             <>
@@ -259,7 +398,7 @@ export default function ConsultantDocumentsScreen() {
                       value={rejectionReason}
                     />
                     <ThemedText type="caption" themeColor="textSecondary">
-                      The student will see this message on their Documents page.
+                      Rejection note
                     </ThemedText>
                     <Pressable
                       disabled={
@@ -328,7 +467,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: Spacing.three,
     gap: Spacing.two,
+    marginTop: Spacing.two,
     marginBottom: Spacing.two,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    paddingRight: Spacing.two,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    minWidth: 110,
+    gap: 2,
   },
   rejectCard: {
     borderWidth: 1,
@@ -343,12 +498,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     textAlignVertical: 'top',
+    marginTop: Spacing.two,
   },
   button: {
     borderRadius: 14,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     alignItems: 'center',
+    marginTop: Spacing.two,
   },
   approve: { backgroundColor: Brand.success },
   reject: { backgroundColor: Brand.danger },

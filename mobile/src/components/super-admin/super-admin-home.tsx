@@ -195,7 +195,7 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
     },
     {
       id: 'visa',
-      title: 'Visa',
+      title: 'File Making',
       subtitle: 'Embassy appointments',
       emoji: '🛂',
       tint: theme.cardLime,
@@ -210,7 +210,7 @@ export function SuperAdminHome({ user, token, onLogout }: Props) {
     { emoji: '🏫', label: 'Universities', onPress: () => router.push('/consultant-universities') },
     { emoji: '📚', label: 'Catalog', onPress: () => router.push('/consultant-universities-catalog') },
     { emoji: '🎤', label: 'Interview', onPress: () => router.push('/departments/interview') },
-    { emoji: '🛂', label: 'Visa', onPress: () => router.push('/departments/visa') },
+    { emoji: '🛂', label: 'File Making', onPress: () => router.push('/departments/visa') },
     { emoji: '👥', label: 'Team & access', onPress: () => router.push('/departments/team') },
     {
       emoji: '💬',

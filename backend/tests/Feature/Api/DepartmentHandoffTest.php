@@ -132,6 +132,7 @@ class DepartmentHandoffTest extends TestCase
         Sanctum::actingAs($universities);
         $this->postJson("/api/consultant/students/{$student->id}/universities", [
             'university_id' => $university->id,
+            'required_documents' => ['passport'],
         ])->assertCreated();
 
         Sanctum::actingAs($finance);

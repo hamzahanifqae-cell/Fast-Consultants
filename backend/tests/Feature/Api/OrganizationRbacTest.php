@@ -66,7 +66,7 @@ class OrganizationRbacTest extends TestCase
         Sanctum::actingAs($super);
 
         $this->postJson('/api/organization/users', [
-            'name' => 'Visa Staff',
+            'name' => 'File Making Staff',
             'email' => 'visa-staff@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',

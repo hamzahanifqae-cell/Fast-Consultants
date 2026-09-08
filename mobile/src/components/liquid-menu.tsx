@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, type ThemeColor } from '@/constants/theme';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
 
 export type LiquidMenuItem = {
@@ -46,6 +47,7 @@ export function LiquidMenu({ visible, onClose, items, onLogout }: LiquidMenuProp
   const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const bottomPad = useBottomSafeInset(Spacing.three);
   const panelWidth = Math.min(screenWidth * 0.9, 380);
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
   const topInset = Math.max(insets.top, androidStatusBar);
@@ -99,7 +101,7 @@ export function LiquidMenu({ visible, onClose, items, onLogout }: LiquidMenuProp
               width: panelWidth,
               backgroundColor: theme.background,
               paddingTop: topInset + Spacing.three,
-              paddingBottom: Math.max(insets.bottom, Spacing.three),
+              paddingBottom: bottomPad,
             },
           ]}>
           <View style={styles.header}>

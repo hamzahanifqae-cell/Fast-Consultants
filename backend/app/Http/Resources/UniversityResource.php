@@ -21,7 +21,7 @@ class UniversityResource extends JsonResource
             'name' => $this->name,
             'country' => $this->country,
             'city' => $this->city,
-            'description' => $this->description,
+            'description' => $this->description === 'Suggested by student.' ? null : $this->description,
             'is_visible_to_students' => $this->is_visible_to_students,
             'required_documents' => $this->whenLoaded('requiredDocuments', fn () => $this->requiredDocuments
                 ->map(fn ($requirement) => [
@@ -35,6 +35,14 @@ class UniversityResource extends JsonResource
                 'name' => $this->consultant->name,
                 'email' => $this->consultant->email,
             ]),
+            'selection_source' => $this->when(
+                $this->pivot !== null,
+                fn () => $this->pivot->source ?? 'staff_shared',
+            ),
+            'notes' => $this->when(
+                $this->pivot !== null,
+                fn () => $this->pivot->notes,
+            ),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

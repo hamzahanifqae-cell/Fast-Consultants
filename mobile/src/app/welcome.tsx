@@ -7,6 +7,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Brand } from '@/constants/theme';
 import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AccountType } from '@/types/auth';
@@ -44,6 +45,7 @@ const ROLES: {
 export default function WelcomeScreen() {
   const token = useAuthStore((state) => state.token);
   const theme = useTheme();
+  const bottomPad = useBottomSafeInset(24);
   useAuthStatusBar();
 
   if (token) {
@@ -66,8 +68,14 @@ export default function WelcomeScreen() {
         </View>
       </SafeAreaView>
 
-      <View style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
-        <ThemeToggle />
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: theme.backgroundElement,
+            paddingBottom: bottomPad + 20,
+          },
+        ]}>
         <Text style={[styles.sheetHint, { color: theme.textSecondary }]}>I am a…</Text>
 
         {ROLES.map((role) => (
@@ -92,6 +100,10 @@ export default function WelcomeScreen() {
             <Text style={[styles.roleChevron, { color: theme.textSecondary }]}>›</Text>
           </Pressable>
         ))}
+
+        <View style={styles.themeBlock}>
+          <ThemeToggle />
+        </View>
       </View>
     </View>
   );
@@ -128,7 +140,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 48,
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 40,
     gap: 14,
   },
   sheetHint: {
@@ -137,6 +148,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 4,
     textAlign: 'center',
+  },
+  themeBlock: {
+    marginTop: 8,
   },
   roleCard: {
     flexDirection: 'row',

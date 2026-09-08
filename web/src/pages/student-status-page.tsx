@@ -11,6 +11,15 @@ import { isProfileComplete } from '@/lib/student-profile';
 import type { ApplicationStatusResponse, StudentProfile, VisaAppointment } from '@/types/auth';
 import './dashboard.css';
 
+function areDocumentsJourneyComplete(status: ApplicationStatusResponse | undefined): boolean {
+  if (!status?.checklist?.documents?.accepted) return false;
+  const urgentDocs = status.checklist.urgent_documents;
+  if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) return false;
+  const universityDocs = status.checklist.university_documents;
+  if (!universityDocs || universityDocs.required === 0) return true;
+  return universityDocs.complete;
+}
+
 function formatWhen(value: string | null) {
   if (!value) return 'To be confirmed';
   const date = new Date(value);
@@ -51,7 +60,7 @@ function overallStatusProgress(
   const profileDone = isProfileComplete(profile);
   const steps = [
     profileDone,
-    Boolean(status.checklist?.documents?.accepted),
+    areDocumentsJourneyComplete(status),
     Boolean(status.checklist?.charge_receipts?.accepted),
     Boolean(status.application?.preparation?.completed_at),
     status.application?.interview?.status === 'completed' ||
@@ -76,10 +85,10 @@ function overallStatusProgress(
   if (steps[4] && !steps[5]) {
     return {
       percent,
-      title: 'Visa stage in progress',
+      title: 'File Making stage in progress',
       description: appointments.some((a) => a.status === 'scheduled')
-        ? 'Your interview is done. Attend your scheduled visa appointment next.'
-        : 'Interview complete. Visa staff will schedule your embassy appointment.',
+        ? 'Your interview is done. Attend your scheduled File Making appointment next.'
+        : 'Interview complete. File Making staff will schedule your embassy appointment.',
     };
   }
 
@@ -98,7 +107,7 @@ function buildJourneySteps(
   if (!status) return [];
 
   const profileDone = isProfileComplete(profile);
-  const docsDone = Boolean(status.checklist?.documents?.accepted);
+  const docsDone = areDocumentsJourneyComplete(status);
   const feesDone = Boolean(status.checklist?.charge_receipts?.accepted);
   const prepDone = Boolean(status.application?.preparation?.completed_at);
   const interviewDone =
@@ -120,8 +129,24 @@ function buildJourneySteps(
   }
 
   const docs = status.checklist?.documents;
+  const urgentDocs = status.checklist?.urgent_documents;
+  const universityDocs = status.checklist?.university_documents;
   const fees = status.checklist?.charge_receipts;
   const interview = status.application?.interview;
+
+  const documentsDetail = !profileDone
+    ? 'Complete student info first'
+    : docsDone
+      ? 'All required files approved'
+      : urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete
+        ? urgentDocs.action_needed > 0
+          ? `${urgentDocs.action_needed} urgent document${urgentDocs.action_needed === 1 ? '' : 's'} needed`
+          : `${urgentDocs.pending} urgent document${urgentDocs.pending === 1 ? '' : 's'} in review`
+        : universityDocs && universityDocs.required > 0 && docs?.accepted && !universityDocs.complete
+          ? universityDocs.action_needed > 0
+            ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
+            : `${universityDocs.pending} university document${universityDocs.pending === 1 ? '' : 's'} in review`
+          : `${docs?.approved ?? 0} approved · ${docs?.pending ?? 0} pending review`;
 
   return [
     {
@@ -136,12 +161,11 @@ function buildJourneySteps(
     },
     {
       id: 'documents',
-      label: 'Documents',
-      detail: !profileDone
-        ? 'Complete student info first'
-        : docsDone
-          ? 'All required files approved'
-          : `${docs?.approved ?? 0} approved · ${docs?.pending ?? 0} pending review`,
+      label:
+        urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete
+          ? 'Urgent documents'
+          : 'Documents',
+      detail: documentsDetail,
       state: !profileDone ? 'locked' : stateFor(1),
       href: StudentRoutes.documents,
       actionLabel: docsDone ? 'View' : 'Open',
@@ -198,14 +222,14 @@ function buildJourneySteps(
     },
     {
       id: 'visa',
-      label: 'Visa appointment',
+      label: 'File Making appointment',
       detail: !profileDone
         ? 'Complete student info first'
         : visaDone
           ? 'Embassy appointment completed'
           : appointments.some((a) => a.status === 'scheduled')
             ? 'Appointment scheduled — see details below'
-            : 'Visa staff will book after interview',
+            : 'File Making staff will book after interview',
       state: !profileDone ? 'locked' : stateFor(5),
       href: StudentRoutes.visaAppointments,
       actionLabel: appointments.length ? 'View' : undefined,
@@ -322,7 +346,7 @@ export function StudentStatusPage() {
             </Link>
           }
           subtitle="Embassy visits scheduled by the visa team."
-          title="Visa appointments">
+          title="File Making appointments">
           {appointmentsQuery.isLoading ? (
             <p className="muted">Loading appointments…</p>
           ) : appointments.length ? (
@@ -347,7 +371,7 @@ export function StudentStatusPage() {
               </span>
               <div>
                 <strong>No appointments yet</strong>
-                <p>Visa staff will add your embassy slot here after the interview stage.</p>
+                <p>File Making staff will add your embassy slot here after the interview stage.</p>
               </div>
             </div>
           )}

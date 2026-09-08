@@ -92,7 +92,7 @@ class User extends Authenticatable
     public function assignedUniversities(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(University::class, 'student_university', 'student_id', 'university_id')
-            ->withPivot(['assigned_by', 'notes'])
+            ->withPivot(['assigned_by', 'notes', 'source'])
             ->withTimestamps();
     }
 

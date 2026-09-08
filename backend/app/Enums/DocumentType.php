@@ -20,7 +20,7 @@ enum DocumentType: string
         return match ($this) {
             self::Passport => 'Passport',
             self::Cnic => 'CNIC',
-            self::Metric => 'Metric (Matric)',
+            self::Metric => 'Matric',
             self::Intermediate => 'Intermediate',
             self::Transcript => 'Transcript',
             self::DegreeCertificate => 'Degree certificate',

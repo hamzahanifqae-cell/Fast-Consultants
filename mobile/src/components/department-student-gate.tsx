@@ -29,7 +29,7 @@ export function DepartmentStudentGate({
   onSelect,
   onClear,
   children,
-  hint = 'Choose a student to continue in this department.',
+  hint,
 }: Props) {
   const theme = useTheme();
   const [query, setQuery] = useState('');
@@ -59,9 +59,11 @@ export function DepartmentStudentGate({
         <View style={styles.header}>
           <View style={styles.headerCopy}>
             <ThemedText type="subtitle">Student directory</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {hint}
-            </ThemedText>
+            {hint ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {hint}
+              </ThemedText>
+            ) : null}
           </View>
           <View style={[styles.count, { backgroundColor: theme.inputFill }]}>
             <ThemedText type="caption" themeColor="textSecondary">

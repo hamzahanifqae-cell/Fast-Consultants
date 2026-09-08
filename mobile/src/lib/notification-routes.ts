@@ -8,6 +8,7 @@ const ORG_LEGACY: Record<string, string> = {
   '/departments/student-info/students': '/consultant-students',
   '/departments/student-info/documents': '/departments/documents',
   '/departments/documents': '/departments/documents',
+  '/departments/form-templates': '/departments/form-templates',
   '/departments/universities': '/departments/universities',
   '/departments/universities/catalog': '/consultant-universities-catalog',
   '/departments/universities/share': '/consultant-universities',
@@ -26,6 +27,7 @@ const ORG_LEGACY: Record<string, string> = {
 
 const WEB_STUDENT: Record<string, string> = {
   '/student/documents': '/student-documents',
+  '/student/form-templates': '/student-form-templates',
   '/student/universities': '/student-universities',
   '/student/charge-receipts': '/student-charge-receipts',
   '/student/preparation': '/student-preparation',

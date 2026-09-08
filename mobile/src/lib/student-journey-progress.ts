@@ -101,6 +101,15 @@ function formatStatusWhen(value: string | null) {
   });
 }
 
+export function areDocumentsJourneyComplete(status: ApplicationStatusResponse | undefined): boolean {
+  if (!status?.checklist.documents.accepted) return false;
+  const urgentDocs = status.checklist.urgent_documents;
+  if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) return false;
+  const universityDocs = status.checklist.university_documents;
+  if (!universityDocs || universityDocs.required === 0) return true;
+  return universityDocs.complete;
+}
+
 export function overallStatusSummary(
   status: ApplicationStatusResponse | undefined,
   profile: StudentProfile | undefined,
@@ -117,7 +126,7 @@ export function overallStatusSummary(
   const profileDone = isProfileComplete(profile);
   const steps = [
     profileDone,
-    Boolean(status.checklist.documents.accepted),
+    areDocumentsJourneyComplete(status),
     Boolean(status.checklist.charge_receipts.accepted),
     Boolean(status.application.preparation.completed_at),
     isInterviewJourneyComplete(status.application.interview),
@@ -138,10 +147,10 @@ export function overallStatusSummary(
   if (steps[4] && !steps[5]) {
     return {
       percent,
-      title: 'Visa stage in progress',
+      title: 'File Making stage in progress',
       description: appointments.some((a) => a.status === 'scheduled')
-        ? 'Your interview is done. Attend your scheduled visa appointment next.'
-        : 'Interview complete. Visa staff will schedule your embassy appointment.',
+        ? 'Your interview is done. Attend your scheduled File Making appointment next.'
+        : 'Interview complete. File Making staff will schedule your embassy appointment.',
     };
   }
 
@@ -160,7 +169,7 @@ export function buildStatusJourneySteps(
   if (!status) return [];
 
   const profileDone = isProfileComplete(profile);
-  const docsDone = Boolean(status.checklist.documents.accepted);
+  const docsDone = areDocumentsJourneyComplete(status);
   const feesDone = Boolean(status.checklist.charge_receipts.accepted);
   const prepDone = Boolean(status.application.preparation.completed_at);
   const interviewDone = isInterviewJourneyComplete(status.application.interview);
@@ -177,8 +186,24 @@ export function buildStatusJourneySteps(
   }
 
   const docs = status.checklist.documents;
+  const urgentDocs = status.checklist.urgent_documents;
+  const universityDocs = status.checklist.university_documents;
   const fees = status.checklist.charge_receipts;
   const interview = status.application.interview;
+
+  const documentsDetail = !profileDone
+    ? 'Complete student info first'
+    : docsDone
+      ? 'All required files approved'
+      : urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete
+        ? urgentDocs.action_needed > 0
+          ? `${urgentDocs.action_needed} urgent document${urgentDocs.action_needed === 1 ? '' : 's'} needed`
+          : `${urgentDocs.pending} urgent document${urgentDocs.pending === 1 ? '' : 's'} in review`
+        : universityDocs && universityDocs.required > 0 && docs.accepted && !universityDocs.complete
+          ? universityDocs.action_needed > 0
+            ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
+            : `${universityDocs.pending} university document${universityDocs.pending === 1 ? '' : 's'} in review`
+          : `${docs.approved} approved · ${docs.pending} pending review`;
 
   return [
     {
@@ -193,12 +218,11 @@ export function buildStatusJourneySteps(
     },
     {
       id: 'documents',
-      label: 'Documents',
-      detail: !profileDone
-        ? 'Complete student info first'
-        : docsDone
-          ? 'All required files approved'
-          : `${docs.approved} approved · ${docs.pending} pending review`,
+      label:
+        urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete
+          ? 'Urgent documents'
+          : 'Documents',
+      detail: documentsDetail,
       state: !profileDone ? 'locked' : stateFor(1),
       href: '/student-documents',
       actionLabel: docsDone ? 'View' : 'Open',
@@ -255,14 +279,14 @@ export function buildStatusJourneySteps(
     },
     {
       id: 'visa',
-      label: 'Visa appointment',
+      label: 'File Making appointment',
       detail: !profileDone
         ? 'Complete student info first'
         : visaDone
           ? 'Embassy appointment completed'
           : appointments.some((a) => a.status === 'scheduled')
             ? 'Appointment scheduled — see details below'
-            : 'Visa staff will book after interview',
+            : 'File Making staff will book after interview',
       state: !profileDone ? 'locked' : stateFor(5),
       href: '/student-visa-appointments',
       actionLabel: appointments.length ? 'View' : undefined,
@@ -284,8 +308,13 @@ export function studentProgressSteps(
     },
     {
       id: 'documents',
-      label: 'Documents',
-      done: Boolean(status?.checklist.documents.accepted),
+      label:
+        status?.checklist.urgent_documents &&
+        status.checklist.urgent_documents.required > 0 &&
+        !status.checklist.urgent_documents.complete
+          ? 'Urgent docs'
+          : 'Documents',
+      done: areDocumentsJourneyComplete(status),
       color: '#60a5fa',
     },
     {
@@ -308,7 +337,7 @@ export function studentProgressSteps(
     },
     {
       id: 'visa',
-      label: 'Visa',
+      label: 'File Making',
       done: isVisaJourneyComplete(appointments),
       color: '#a78bfa',
     },
@@ -348,6 +377,38 @@ export function currentStudentStep(
     };
   }
 
+  const urgentDocs = status.checklist.urgent_documents;
+  if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) {
+    const missingNames = urgentDocs.missing
+      .filter((item) => item.status === 'missing' || item.status === 'rejected')
+      .map((item) => item.label);
+    const pendingNames = urgentDocs.missing
+      .filter((item) => item.status === 'pending')
+      .map((item) => item.label);
+
+    if (missingNames.length > 0) {
+      return {
+        title: 'Urgent documents',
+        body:
+          missingNames.length <= 3
+            ? `Staff needs these urgently: ${missingNames.join(', ')}. Upload them on Documents.`
+            : `${missingNames.length} urgent documents still need to be uploaded.`,
+        href: '/student-documents',
+        label: 'Go to documents',
+      };
+    }
+
+    return {
+      title: 'Urgent documents under review',
+      body:
+        pendingNames.length > 0
+          ? `Waiting for staff to approve: ${pendingNames.slice(0, 3).join(', ')}${pendingNames.length > 3 ? '…' : ''}.`
+          : 'Staff are reviewing your urgent document uploads.',
+      href: '/student-documents',
+      label: 'View documents',
+    };
+  }
+
   const docs = status.checklist.documents;
   if (!docs.accepted) {
     if (docs.total === 0) {
@@ -369,6 +430,38 @@ export function currentStudentStep(
     return {
       title: 'Documents under review',
       body: 'Staff are checking your uploads. This step stays active until every file is approved.',
+      href: '/student-documents',
+      label: 'View documents',
+    };
+  }
+
+  const universityDocs = status.checklist.university_documents;
+  if (universityDocs && universityDocs.required > 0 && !universityDocs.complete) {
+    const missingNames = universityDocs.missing
+      .filter((item) => item.status === 'missing' || item.status === 'rejected')
+      .map((item) => item.label);
+    const pendingNames = universityDocs.missing
+      .filter((item) => item.status === 'pending')
+      .map((item) => item.label);
+
+    if (missingNames.length > 0) {
+      return {
+        title: 'Upload university-required documents',
+        body:
+          missingNames.length <= 3
+            ? `Your universities still need: ${missingNames.join(', ')}. Upload these to continue.`
+            : `${missingNames.length} documents are still needed for your university options.`,
+        href: '/student-documents',
+        label: 'Go to documents',
+      };
+    }
+
+    return {
+      title: 'University documents under review',
+      body:
+        pendingNames.length > 0
+          ? `Waiting for staff to approve: ${pendingNames.slice(0, 3).join(', ')}${pendingNames.length > 3 ? '…' : ''}.`
+          : 'University staff are reviewing your remaining required documents.',
       href: '/student-documents',
       label: 'View documents',
     };
@@ -478,24 +571,24 @@ export function currentStudentStep(
     const scheduled = appointments.filter((item) => item.status === 'scheduled');
     if (scheduled.length > 0) {
       return {
-        title: 'Attend your visa appointment',
-        body: 'Visa staff shared your embassy appointment. Check the details and prepare for the visit.',
+        title: 'Attend your File Making appointment',
+        body: 'File Making staff shared your embassy appointment. Check the details and prepare for the visit.',
         href: '/student-visa-appointments',
-        label: 'Open visa appointments',
+        label: 'Open File Making appointments',
       };
     }
 
     return {
-      title: 'Waiting for visa appointment',
-      body: 'Interview is finished. Visa staff will schedule your embassy appointment next.',
+      title: 'Waiting for File Making appointment',
+      body: 'Interview is finished. File Making staff will schedule your embassy appointment next.',
       href: '/student-visa-appointments',
-      label: 'Open visa appointments',
+      label: 'Open File Making appointments',
     };
   }
 
   return {
     title: 'All current steps complete',
-    body: 'Interview and visa appointment are done. Message your consultant anytime if you need support.',
+    body: 'Interview and File Making appointment are done. Message your consultant anytime if you need support.',
     href: '/student-status',
     label: 'View status',
     done: true,

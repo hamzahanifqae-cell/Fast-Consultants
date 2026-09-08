@@ -41,7 +41,7 @@ export default function ConsultantVisaDepartmentScreen() {
     ...(showVisa
       ? [
           {
-            title: 'Visa appointments',
+            title: 'File Making appointments',
             description:
               'Schedule embassy appointments, update status, and notify the student.',
             color: theme.cardLime,
@@ -55,7 +55,7 @@ export default function ConsultantVisaDepartmentScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <StudentScreen showBack title="Visa Department">
+      <StudentScreen showBack title="File Making Department">
         <StudentStackCards items={items} />
       </StudentScreen>
     </View>

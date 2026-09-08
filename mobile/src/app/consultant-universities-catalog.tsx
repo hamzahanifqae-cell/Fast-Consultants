@@ -22,7 +22,7 @@ import type { DocumentType, University } from '@/types/auth';
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: 'passport', label: 'Passport' },
-  { value: 'metric', label: 'Metric (Matric)' },
+  { value: 'metric', label: 'Matric' },
   { value: 'intermediate', label: 'Intermediate' },
   { value: 'transcript', label: 'Transcript' },
   { value: 'degree_certificate', label: 'Degree certificate' },
@@ -235,7 +235,7 @@ export default function ConsultantUniversitiesCatalogScreen() {
         ))}
         {!catalogQuery.isLoading && catalog.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Catalog is empty. Add a university to get started.
+            Catalog is empty.
           </ThemedText>
         ) : null}
       </ThemedView>

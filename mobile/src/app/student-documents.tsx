@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Redirect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { DocumentPreviewModal } from '@/components/document-preview-modal';
 import { PageLoader } from '@/components/page-loader';
 import { RejectionFeedback } from '@/components/student/rejection-feedback';
 import { StudentScreen } from '@/components/student/student-screen';
@@ -17,14 +20,24 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api, getApiErrorMessage } from '@/lib/api';
+import { API_URL, api, getApiErrorMessage } from '@/lib/api';
+import {
+  universityDocumentCoverage,
+  universityDocumentStatusLabel,
+} from '@/lib/university-document-requirements';
 import { useAuthStore } from '@/stores/auth-store';
-import type { DocumentType, StudentDocument } from '@/types/auth';
+import type {
+  ApplicationStatusResponse,
+  DocumentType,
+  StudentDocument,
+  University,
+} from '@/types/auth';
 
 type DocumentOption = {
   value: DocumentType;
   label: string;
   required?: boolean;
+  urgent?: boolean;
   requirements: string[];
   titlePlaceholder: string;
 };
@@ -57,7 +70,7 @@ const DOCUMENT_TYPES: DocumentOption[] = [
   },
   {
     value: 'metric',
-    label: 'Metric (Matric)',
+    label: 'Matric',
     required: true,
     titlePlaceholder: 'e.g. Matric certificate',
     requirements: [
@@ -165,6 +178,12 @@ export default function StudentDocumentsScreen() {
   const [pickedUri, setPickedUri] = useState<string | null>(null);
   const [pickedMime, setPickedMime] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<{
+    title: string;
+    uri: string;
+    mimeType?: string | null;
+  } | null>(null);
 
   const documentsQuery = useQuery({
     queryKey: ['student-documents'],
@@ -175,7 +194,41 @@ export default function StudentDocumentsScreen() {
     },
   });
 
+  const universitiesQuery = useQuery({
+    queryKey: ['student-universities'],
+    enabled: Boolean(token) && isStudent,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: University[] }>('/student/universities');
+      return data.data;
+    },
+  });
+
+  const statusQuery = useQuery({
+    queryKey: ['student-application-status'],
+    enabled: Boolean(token) && isStudent,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: ApplicationStatusResponse }>(
+        '/student/application-status',
+      );
+      return data.data;
+    },
+  });
+
   const docs = documentsQuery.data ?? [];
+  const universities = universitiesQuery.data ?? [];
+  const urgentDocuments = statusQuery.data?.checklist.urgent_documents;
+  const universityCoverage = useMemo(
+    () => universityDocumentCoverage(universities, docs),
+    [universities, docs],
+  );
+  const universityRequiredTypes = useMemo(
+    () => new Set(universityCoverage.items.map((item) => item.type)),
+    [universityCoverage],
+  );
+  const urgentRequiredTypes = useMemo(
+    () => new Set((urgentDocuments?.missing ?? []).map((item) => item.type)),
+    [urgentDocuments],
+  );
   const editingDoc = docs.find((doc) => doc.id === editingId) ?? null;
 
   const uploadedByType = useMemo(() => {
@@ -193,8 +246,15 @@ export default function StudentDocumentsScreen() {
           item.value === editingDoc?.type ||
           REPEATABLE_TYPES.includes(item.value) ||
           !uploadedByType.has(item.value),
-      ),
-    [uploadedByType, editingDoc],
+      ).map((item) => ({
+        ...item,
+        required:
+          item.required ||
+          universityRequiredTypes.has(item.value) ||
+          urgentRequiredTypes.has(item.value),
+        urgent: urgentRequiredTypes.has(item.value),
+      })),
+    [uploadedByType, editingDoc, universityRequiredTypes, urgentRequiredTypes],
   );
 
   useEffect(() => {
@@ -205,8 +265,8 @@ export default function StudentDocumentsScreen() {
   }, [typeOptions, documentType, editingId]);
 
   const selectedOption = useMemo(
-    () => DOCUMENT_TYPES.find((option) => option.value === documentType) ?? null,
-    [documentType],
+    () => typeOptions.find((option) => option.value === documentType) ?? null,
+    [documentType, typeOptions],
   );
 
   const uploadDocument = useMutation({
@@ -340,7 +400,63 @@ export default function StudentDocumentsScreen() {
     setPickedMime(null);
     setDropdownOpen(false);
     setError(null);
+  }
+
+  async function shareDownloadedFile(
+    uri: string,
+    options: { title: string; mimeType?: string | null },
+  ) {
+    if (!(await Sharing.isAvailableAsync())) {
+      setError('Sharing is unavailable on this device.');
+      return;
+    }
+
+    await Sharing.shareAsync(uri, {
+      mimeType: options.mimeType ?? undefined,
+      dialogTitle: options.title,
+    });
+  }
+
+  async function openDocument(document: StudentDocument) {
+    if (!token) return;
+    setOpeningId(document.id);
+    setError(null);
+    try {
+      const target = `${FileSystem.cacheDirectory}doc-${document.id}-${document.original_name}`;
+      const result = await FileSystem.downloadAsync(
+        `${API_URL}/student/documents/${document.id}/download`,
+        target,
+        { headers: { Authorization: `Bearer ${token}`, Accept: '*/*' } },
+      );
+
+      const isImage =
+        document.mime_type?.startsWith('image/') ||
+        /\.(jpe?g|png|gif|webp)$/i.test(document.original_name);
+
+      if (isImage) {
+        setPreview({
+          title: document.original_name || document.title,
+          uri: result.uri,
+          mimeType: document.mime_type,
+        });
+        return;
       }
+
+      const shared = await Sharing.isAvailableAsync();
+      if (shared) {
+        await shareDownloadedFile(result.uri, {
+          title: document.title,
+          mimeType: document.mime_type,
+        });
+      } else {
+        setError('Could not open this file on this device. Try again on web.');
+      }
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not open this document.'));
+    } finally {
+      setOpeningId(null);
+    }
+  }
 
   const canUpload =
     Boolean(documentType) &&
@@ -351,15 +467,139 @@ export default function StudentDocumentsScreen() {
     <StudentScreen
       showBack
       title="Documents">
+          <DocumentPreviewModal
+            mimeType={preview?.mimeType}
+            onClose={() => setPreview(null)}
+            onDownload={
+              preview
+                ? () => {
+                    void shareDownloadedFile(preview.uri, {
+                      title: preview.title,
+                      mimeType: preview.mimeType,
+                    });
+                  }
+                : undefined
+            }
+            title={preview?.title ?? 'Document'}
+            uri={preview?.uri ?? null}
+            visible={Boolean(preview)}
+          />
+
+          {urgentDocuments && urgentDocuments.required > 0 ? (
+            <ThemedView style={[styles.requirementsCard, { backgroundColor: theme.cardGold }]}>
+              <ThemedText type="smallBold">Urgent documents</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Staff asked for these files now. Your application stays on Documents until they are
+                approved.
+              </ThemedText>
+              <View style={styles.uniDocRow}>
+                {urgentDocuments.missing.map((item) => {
+                  const existing = uploadedByType.get(item.type);
+                  return (
+                    <Pressable
+                      key={`urgent-${item.id}`}
+                      onPress={() => {
+                        if (existing && (existing.status === 'pending' || existing.status === 'rejected')) {
+                          setEditingId(existing.id);
+                          setDocumentType(existing.type);
+                          setTitle(existing.title);
+                          setDropdownOpen(false);
+                          setError(null);
+                          return;
+                        }
+                        if (existing && !REPEATABLE_TYPES.includes(item.type)) {
+                          return;
+                        }
+                        setEditingId(null);
+                        setDocumentType(item.type);
+                        setDropdownOpen(false);
+                        setError(null);
+                      }}
+                      style={[
+                        styles.uniDocChip,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor:
+                            item.status === 'approved'
+                              ? theme.successMuted
+                              : item.status === 'pending'
+                                ? theme.cardGold
+                                : theme.background,
+                        },
+                      ]}>
+                      <ThemedText type="caption" style={{ fontWeight: '700' }}>
+                        {item.label}
+                      </ThemedText>
+                      <ThemedText type="caption" themeColor="textSecondary">
+                        {universityDocumentStatusLabel(item.status)}
+                      </ThemedText>
+                      {item.note ? (
+                        <ThemedText type="caption" themeColor="textSecondary">
+                          {item.note}
+                        </ThemedText>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ThemedView>
+          ) : null}
+
+          {universityCoverage.requiredCount > 0 ? (
+            <ThemedView style={[styles.requirementsCard, { backgroundColor: theme.backgroundElement }]}>
+              <ThemedText type="smallBold">Required for your universities</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {universityCoverage.complete
+                  ? 'All university-required documents are approved.'
+                  : `${universityCoverage.coveredCount} of ${universityCoverage.requiredCount} approved.`}
+              </ThemedText>
+              <View style={styles.uniDocRow}>
+                {universityCoverage.items.map((item) => (
+                  <Pressable
+                    key={item.type}
+                    onPress={() => {
+                      if (uploadedByType.has(item.type) && !REPEATABLE_TYPES.includes(item.type)) {
+                        return;
+                      }
+                      setDocumentType(item.type);
+                      setDropdownOpen(false);
+                      setError(null);
+                    }}
+                    style={[
+                      styles.uniDocChip,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor:
+                          item.status === 'approved'
+                            ? theme.successMuted
+                            : item.status === 'pending'
+                              ? theme.cardGold
+                              : theme.background,
+                      },
+                    ]}>
+                    <ThemedText type="caption" style={{ fontWeight: '700' }}>
+                      {item.label}
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {universityDocumentStatusLabel(item.status)}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </ThemedView>
+          ) : null}
+
           <ThemedText type="smallBold">Document type</ThemedText>
           <Pressable
             onPress={() => setDropdownOpen((open) => !open)}
             style={[styles.dropdown, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="small">
               {selectedOption
-                ? selectedOption.required
-                  ? `${selectedOption.label} *`
-                  : selectedOption.label
+                ? selectedOption.urgent
+                  ? `${selectedOption.label} (urgent)`
+                  : selectedOption.required
+                    ? `${selectedOption.label} *`
+                    : selectedOption.label
                 : 'Select document type'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
@@ -380,7 +620,11 @@ export default function StudentDocumentsScreen() {
                       selected ? { backgroundColor: theme.backgroundSelected } : null,
                     ]}>
                     <ThemedText type="small">
-                      {option.required ? `${option.label} *` : option.label}
+                      {option.urgent
+                        ? `${option.label} (urgent)`
+                        : option.required
+                          ? `${option.label} *`
+                          : option.label}
                     </ThemedText>
                   </Pressable>
                 );
@@ -513,28 +757,33 @@ export default function StudentDocumentsScreen() {
                     </View>
                   </View>
                   <View style={[styles.footerBar, { backgroundColor: pastel }]}>
-                    {document.status === 'pending' || document.status === 'rejected' ? (
-                      <View style={styles.footerActions}>
-                        <Pressable
-                          disabled={uploadDocument.isPending || deleteDocument.isPending}
-                          onPress={() => startEdit(document)}>
-                          <ThemedText type="caption" style={styles.barText}>
-                            Edit
-                          </ThemedText>
-                        </Pressable>
-                        <Pressable
-                          disabled={uploadDocument.isPending || deleteDocument.isPending}
-                          onPress={() => deleteDocument.mutate(document.id)}>
-                          <ThemedText type="caption" style={styles.barText}>
-                            Delete
-                          </ThemedText>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <ThemedText type="caption" style={styles.barText}>
-                        {document.status_label}
-                      </ThemedText>
-                    )}
+                    <View style={styles.footerActions}>
+                      <Pressable
+                        disabled={openingId === document.id}
+                        onPress={() => void openDocument(document)}>
+                        <ThemedText type="caption" style={styles.barText}>
+                          {openingId === document.id ? 'Opening…' : 'View'}
+                        </ThemedText>
+                      </Pressable>
+                      {document.status === 'pending' || document.status === 'rejected' ? (
+                        <>
+                          <Pressable
+                            disabled={uploadDocument.isPending || deleteDocument.isPending}
+                            onPress={() => startEdit(document)}>
+                            <ThemedText type="caption" style={styles.barText}>
+                              Edit
+                            </ThemedText>
+                          </Pressable>
+                          <Pressable
+                            disabled={uploadDocument.isPending || deleteDocument.isPending}
+                            onPress={() => deleteDocument.mutate(document.id)}>
+                            <ThemedText type="caption" style={styles.barText}>
+                              Delete
+                            </ThemedText>
+                          </Pressable>
+                        </>
+                      ) : null}
+                    </View>
                     <ThemedText type="caption" style={styles.barText}>
                       ›
                     </ThemedText>
@@ -572,6 +821,19 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: Spacing.three,
     gap: Spacing.two,
+  },
+  uniDocRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  uniDocChip: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+    minWidth: 110,
   },
   fieldGap: {
     gap: Spacing.one,

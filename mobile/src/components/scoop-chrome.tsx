@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand } from '@/constants/theme';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
 
 type AuthSheetProps = {
@@ -27,8 +27,7 @@ export function AuthSheet({
   fill = false,
 }: AuthSheetProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, 16);
+  const bottomPad = useBottomSafeInset(16);
 
   return (
     <View

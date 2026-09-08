@@ -144,12 +144,12 @@ export default function HomeScreen() {
     ...(showVisa
       ? [
           {
-            title: 'Visa Department',
+            title: 'File Making Department',
             description:
-              'Interview scheduling, visa appointments, and visa-related information.',
+              'Interview scheduling, File Making appointments, and related information.',
             color: theme.cardCoral,
             glyph: '🛂',
-            meta: 'Interview & Visa',
+            meta: 'Interview & File Making',
             actionLabel: 'Open',
             onPress: () => router.push('/departments/visa'),
           },
@@ -207,7 +207,7 @@ export default function HomeScreen() {
       ? [
           {
             emoji: '🛂',
-            label: 'Visa Dept',
+            label: 'File Making',
             onPress: () => router.push('/departments/visa'),
           },
         ]

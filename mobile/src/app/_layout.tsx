@@ -97,13 +97,16 @@ export default function RootLayout() {
           <Stack.Screen name="consultant-students/index" />
           <Stack.Screen name="consultant-students/[id]" />
           <Stack.Screen name="consultant-documents" />
+          <Stack.Screen name="consultant-form-templates" />
           <Stack.Screen name="consultant-visa-appointments" />
           <Stack.Screen name="student-personal-information" />
           <Stack.Screen name="student-documents" />
+          <Stack.Screen name="student-form-templates" />
           <Stack.Screen name="student-universities" />
           <Stack.Screen name="consultant-universities" />
           <Stack.Screen name="consultant-universities-catalog" />
           <Stack.Screen name="consultant-universities-department" />
+          <Stack.Screen name="consultant-university-suggestions" />
           <Stack.Screen name="student-charge-receipts" />
           <Stack.Screen name="consultant-charge-receipts" />
           <Stack.Screen name="student-status" />
@@ -114,6 +117,7 @@ export default function RootLayout() {
           <Stack.Screen name="organization-team" />
           <Stack.Screen name="departments/student-info" />
           <Stack.Screen name="departments/documents" />
+          <Stack.Screen name="departments/form-templates" />
           <Stack.Screen name="departments/finance" />
           <Stack.Screen name="departments/visa" />
           <Stack.Screen name="departments/interview" />

@@ -251,7 +251,7 @@ export function ConsultantFinancePage() {
                           />
                         </label>
                         <div className="reject-reason-card-footer">
-                          <p className="muted">The student will see this note on their charge receipts.</p>
+                          <p className="muted">Rejection note</p>
                           <button
                             type="button"
                             className="ghost-btn danger"

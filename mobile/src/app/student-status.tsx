@@ -243,7 +243,7 @@ export default function StudentStatusScreen() {
 
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          <ThemedText type="smallBold">Visa appointments</ThemedText>
+          <ThemedText type="smallBold">File Making appointments</ThemedText>
           <Pressable onPress={() => router.push('/student-visa-appointments')}>
             <ThemedText type="caption" style={{ color: Brand.primary }}>
               View all
@@ -287,7 +287,7 @@ export default function StudentStatusScreen() {
             <View style={styles.emptyCopy}>
               <ThemedText type="smallBold">No appointments yet</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
-                Visa staff will add your embassy slot here after the interview stage.
+                File Making staff will add your embassy slot here after the interview stage.
               </ThemedText>
             </View>
           </View>

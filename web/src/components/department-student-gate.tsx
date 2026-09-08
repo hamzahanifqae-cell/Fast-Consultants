@@ -54,9 +54,6 @@ export function DepartmentStudentGate({
         <header className="dept-directory-header">
           <div className="dept-directory-heading">
             <h2>Student directory</h2>
-            <p className="muted">
-              Choose a student to review their file for this department.
-            </p>
           </div>
           <div className="dept-directory-meta">
             <span className="dept-directory-count">

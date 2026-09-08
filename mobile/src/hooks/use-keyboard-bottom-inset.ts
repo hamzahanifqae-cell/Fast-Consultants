@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Dimensions, Keyboard, Platform } from 'react-native';
 
 /**
- * How much of the React Native window is covered by the keyboard.
- * Uses screenY overlap (more accurate on Android) with height as a fallback.
+ * Distance from the top of the keyboard to the bottom of the screen.
+ * Used with Android windowSoftInputMode=adjustNothing so we lift UI in JS.
  */
 export function useKeyboardBottomInset() {
   const [height, setHeight] = useState(0);
@@ -13,9 +13,11 @@ export function useKeyboardBottomInset() {
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const measure = (screenY: number, reportedHeight: number) => {
-      const windowHeight = Dimensions.get('window').height;
-      const overlap = Math.ceil(windowHeight - screenY);
-      return Math.max(overlap, Math.ceil(reportedHeight), 0);
+      const screenHeight = Dimensions.get('screen').height;
+      const fromScreen = Math.max(0, Math.ceil(screenHeight - screenY));
+      const reported = Math.max(0, Math.ceil(reportedHeight));
+      // fromScreen is the true covered strip when the IME overlays the window.
+      return fromScreen > 0 ? fromScreen : reported;
     };
 
     const showSub = Keyboard.addListener(showEvent, (event) => {

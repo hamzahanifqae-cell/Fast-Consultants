@@ -13,6 +13,7 @@ use App\Models\ChargeReceipt;
 use App\Models\StudentApplication;
 use App\Models\StudentDocument;
 use App\Models\StudentProfile;
+use App\Models\UrgentDocumentRequest;
 use App\Models\User;
 use App\Models\VisaAppointment;
 use Illuminate\Support\Collection;
@@ -104,23 +105,29 @@ class StudentProgressService
         Collection $universities,
     ): array {
         $checklist = $this->checklist($documents, $receipts);
+        $hasOpenUrgent = UrgentDocumentRequest::query()
+            ->where('student_id', $student->id)
+            ->whereNull('resolved_at')
+            ->exists();
         $preparationAvailable = $checklist['documents']['accepted']
             && $checklist['charge_receipts']['accepted']
+            && ! $hasOpenUrgent
             && $application->preparation_unlocked_at !== null;
         $interviewAvailable = $application->interview_unlocked_at !== null
             || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true);
 
         $personal = $this->profileProgress($student, $profile);
-        $docs = $this->documentsProgress($documents);
+        $docs = $this->documentsProgress($documents, $universities);
         $unis = $this->universitiesProgress($universities, $documents);
         $fees = $this->feesProgress($receipts);
         $interview = $this->interviewProgress($application, $preparationAvailable, $interviewAvailable);
         $visa = $this->visaProgress($appointments);
+        $currentStatus = $hasOpenUrgent ? 'Urgent documents' : $application->stage->label();
         $status = $this->statusProgress(
             $checklist,
             $application,
             $appointments,
-            $application->stage->label(),
+            $currentStatus,
         );
 
         $sections = [
@@ -141,7 +148,7 @@ class StudentProgressService
             'id' => $student->id,
             'name' => $student->name,
             'email' => $student->email,
-            'current_status' => $application->stage->label(),
+            'current_status' => $currentStatus,
             'overall_percent' => $overall,
             'sections' => $sections,
         ];
@@ -261,16 +268,33 @@ class StudentProgressService
 
     /**
      * @param  Collection<int, StudentDocument>  $documents
+     * @param  Collection<int, \App\Models\University>  $universities
      * @return array{percent: int, complete: bool, report: string, meta: string}
      */
-    private function documentsProgress(Collection $documents): array
+    private function documentsProgress(Collection $documents, Collection $universities): array
     {
         $total = $documents->count();
         $approved = $documents->where('status', DocumentStatus::Approved)->count();
         $pending = $documents->where('status', DocumentStatus::Pending)->count();
         $rejected = $documents->where('status', DocumentStatus::Rejected)->count();
 
-        if ($total === 0) {
+        $requiredTypes = $universities
+            ->flatMap(fn ($university) => $university->requiredDocuments->map(
+                fn ($requirement) => $requirement->document_type->value,
+            ))
+            ->unique()
+            ->values();
+
+        $approvedTypes = $documents
+            ->where('status', DocumentStatus::Approved)
+            ->map(fn (StudentDocument $document) => $document->type->value)
+            ->unique();
+
+        $uniRequired = $requiredTypes->count();
+        $uniCovered = $requiredTypes->filter(fn (string $type) => $approvedTypes->contains($type))->count();
+        $uniComplete = $uniRequired === 0 || $uniCovered >= $uniRequired;
+
+        if ($total === 0 && $uniRequired === 0) {
             return [
                 'percent' => 0,
                 'complete' => false,
@@ -279,19 +303,40 @@ class StudentProgressService
             ];
         }
 
-        $percent = $rejected > 0
+        if ($total === 0 && $uniRequired > 0) {
+            return [
+                'percent' => 0,
+                'complete' => false,
+                'report' => "0/{$uniRequired} university docs ready",
+                'meta' => 'University documents needed',
+            ];
+        }
+
+        $uploadPercent = $rejected > 0
             ? (int) round(($approved / $total) * 100)
             : ($pending > 0
                 ? (int) round((($approved + ($pending * 0.5)) / $total) * 100)
                 : 100);
 
-        $complete = $approved === $total && $rejected === 0 && $pending === 0;
+        $uploadsComplete = $approved === $total && $rejected === 0 && $pending === 0;
+        $uniPercent = $uniRequired === 0 ? 100 : (int) round(($uniCovered / $uniRequired) * 100);
+        $percent = $uniRequired === 0
+            ? $uploadPercent
+            : (int) round(($uploadPercent + $uniPercent) / 2);
+        $complete = $uploadsComplete && $uniComplete;
+
+        $report = "Approved {$approved}, Pending {$pending}, Rejected {$rejected}";
+        if ($uniRequired > 0) {
+            $report .= ", University {$uniCovered}/{$uniRequired}";
+        }
 
         return [
             'percent' => $percent,
             'complete' => $complete,
-            'report' => "Approved {$approved}, Pending {$pending}, Rejected {$rejected}",
-            'meta' => $complete ? 'Documents complete' : 'Document review',
+            'report' => $report,
+            'meta' => ! $uniComplete
+                ? 'University documents needed'
+                : ($complete ? 'Documents complete' : 'Document review'),
         ];
     }
 
@@ -455,7 +500,7 @@ class StudentProgressService
             'percent' => $percent,
             'complete' => $complete,
             'report' => "Scheduled {$scheduled}, Completed {$completed}",
-            'meta' => $complete ? 'Visa complete' : 'Visa appointments',
+            'meta' => $complete ? 'File Making complete' : 'File Making appointments',
         ];
     }
 
@@ -485,7 +530,7 @@ class StudentProgressService
             ['label' => 'Prep', 'done' => $application->preparation_completed_at !== null],
             ['label' => 'Interview', 'done' => $interviewDone || $application->interview_at !== null],
             [
-                'label' => 'Visa',
+                'label' => 'File Making',
                 'done' => $appointments->contains(fn (VisaAppointment $item) => in_array(
                     $item->status,
                     [VisaAppointmentStatus::Completed, VisaAppointmentStatus::Scheduled],

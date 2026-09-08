@@ -2,8 +2,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Brand } from '@/constants/theme';
 import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
 import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { api, getApiErrorMessage } from '@/lib/api';
@@ -43,6 +42,7 @@ export default function RegisterScreen() {
   const keyboardInset = useKeyboardBottomInset();
   const keyboardVisible = keyboardInset > 40;
   const topInset = useAuthTopInset();
+  const bottomPad = useBottomSafeInset(24);
   const theme = useTheme();
   useAuthStatusBar();
 
@@ -118,9 +118,14 @@ export default function RegisterScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.body, { paddingTop: topInset + 52 }]}>
+      <View
+        style={[
+          styles.body,
+          {
+            paddingTop: topInset + 52,
+            paddingBottom: keyboardVisible ? keyboardInset : 0,
+          },
+        ]}>
         {!keyboardVisible ? (
           <View style={styles.heroCopy}>
             <BrandLogo size={40} />
@@ -130,19 +135,16 @@ export default function RegisterScreen() {
           </View>
         ) : null}
 
-        <View
-          style={[
-            styles.sheet,
-            { backgroundColor: theme.backgroundElement },
-            keyboardVisible && styles.sheetKeyboard,
-          ]}>
+        <View style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
           <ScrollView
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}
-            style={keyboardVisible ? styles.formScroll : undefined}
-            contentContainerStyle={styles.form}>
+            contentContainerStyle={[
+              styles.form,
+              { paddingBottom: keyboardVisible ? 12 : 12 + bottomPad },
+            ]}>
             <View style={styles.switchRow}>
               <ThemedText type="small" themeColor="textSecondary">
                 Already have an account?
@@ -221,57 +223,33 @@ export default function RegisterScreen() {
               </ThemedText>
             ) : null}
 
-            {/* Keep CTA in the scroll list when keyboard is closed */}
+            {/* CTA directly under confirm password — 8px gap, no flex spacer */}
+            <Pressable
+              accessibilityLabel="Sign Up"
+              accessibilityRole="button"
+              disabled={submitting}
+              onPress={() => void onSubmit()}
+              style={({ pressed }) => [
+                styles.ctaWrap,
+                { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
+              ]}>
+              <LinearGradient
+                colors={[...Brand.buttonGradient]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={styles.cta}>
+                <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
+              </LinearGradient>
+            </Pressable>
+
             {!keyboardVisible ? (
-              <>
-                <Pressable
-                  accessibilityLabel="Sign Up"
-                  accessibilityRole="button"
-                  disabled={submitting}
-                  onPress={() => void onSubmit()}
-                  style={({ pressed }) => [
-                    styles.ctaWrap,
-                    { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
-                  ]}>
-                  <LinearGradient
-                    colors={[...Brand.buttonGradient]}
-                    end={{ x: 1, y: 1 }}
-                    start={{ x: 0, y: 0 }}
-                    style={styles.cta}>
-                    <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
-                  </LinearGradient>
-                </Pressable>
-                <View style={styles.themeBlock}>
-                  <ThemeToggle />
-                </View>
-              </>
+              <View style={styles.themeBlock}>
+                <ThemeToggle />
+              </View>
             ) : null}
           </ScrollView>
-
-          {/* Sticky Sign Up above the keyboard so it never hides */}
-          {keyboardVisible ? (
-            <View style={styles.ctaDock}>
-              <Pressable
-                accessibilityLabel="Sign Up"
-                accessibilityRole="button"
-                disabled={submitting}
-                onPress={() => void onSubmit()}
-                style={({ pressed }) => [
-                  styles.ctaWrap,
-                  { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
-                ]}>
-                <LinearGradient
-                  colors={[...Brand.buttonGradient]}
-                  end={{ x: 1, y: 1 }}
-                  start={{ x: 0, y: 0 }}
-                  style={styles.cta}>
-                  <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-          ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -342,22 +320,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     maxHeight: '82%',
   },
-  sheetKeyboard: {
-    flex: 1,
-    maxHeight: undefined,
-  },
-  formScroll: {
-    flex: 1,
-  },
   form: {
     paddingHorizontal: 24,
     paddingTop: 18,
-    paddingBottom: 12,
-    gap: 10,
+    gap: 8,
   },
   switchRow: {
     gap: 2,
-    marginBottom: 0,
+    marginBottom: 2,
   },
   input: {
     borderRadius: 14,
@@ -387,17 +357,9 @@ const styles = StyleSheet.create({
   error: {
     textAlign: 'center',
   },
-  ctaDock: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.06)',
-  },
   ctaWrap: {
     borderRadius: 16,
     overflow: 'hidden',
-    marginTop: 4,
   },
   cta: {
     minHeight: 50,
@@ -411,6 +373,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   themeBlock: {
-    marginTop: 8,
+    marginTop: 4,
   },
 });

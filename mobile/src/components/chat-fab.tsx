@@ -1,7 +1,7 @@
 import { AppIcon } from '@/components/app-icon';
 import { Pressable, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
 
 type ChatFabProps = {
@@ -9,7 +9,7 @@ type ChatFabProps = {
 };
 
 export function ChatFab({ onPress }: ChatFabProps) {
-  const insets = useSafeAreaInsets();
+  const bottomPad = useBottomSafeInset(16);
   const theme = useTheme();
 
   return (
@@ -20,7 +20,7 @@ export function ChatFab({ onPress }: ChatFabProps) {
       style={[
         styles.fab,
         {
-          bottom: Math.max(insets.bottom, 16) + 8,
+          bottom: bottomPad + 8,
           right: 20,
           backgroundColor: theme.inverted,
           shadowColor: '#000000',
@@ -44,6 +44,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    elevation: 8,
+    zIndex: 40,
   },
 });

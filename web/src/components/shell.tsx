@@ -58,8 +58,6 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
     },
   });
 
-  const messagesUnread = unreadQuery.data?.unread_count ?? 0;
-
   const showStudents =
     hasPermission(user, 'student_info.view') || hasPermission(user, 'student_info.manage');
   const showFinance =
@@ -74,21 +72,43 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
     hasPermission(user, 'users.view') ||
     hasPermission(user, 'users.manage');
 
+  const suggestionsQuery = useQuery({
+    queryKey: ['consultant-university-suggestions', 'pending'],
+    enabled: Boolean(token) && isTeam && showUniversities,
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: unknown[] }>('/consultant/university-suggestions', {
+        params: { status: 'pending' },
+      });
+      return data.data;
+    },
+  });
+
+  const messagesUnread = unreadQuery.data?.unread_count ?? 0;
+  const suggestionsPending = suggestionsQuery.data?.length ?? 0;
+
   const messagesPath = isTeam ? routes.messages.root : StudentRoutes.messages;
+  const suggestionsPath = routes.universities.suggestions;
 
   const teamLinks: NavItem[] = [
     { to: routes.home, label: 'Dashboard' },
     ...(showStudents ? [{ to: routes.studentInfo.root, label: 'Student Info' }] : []),
     ...(showStudents ? [{ to: routes.documents.root, label: 'Documents' }] : []),
+    ...(showStudents ? [{ to: routes.formTemplates.root, label: 'Form templates' }] : []),
     ...(showUniversities
       ? [
           { to: routes.universities.share, label: 'Universities' },
           { to: routes.universities.catalog, label: 'Catalog' },
+          {
+            to: routes.universities.suggestions,
+            label: 'Suggested universities',
+            unread: suggestionsPending,
+          },
         ]
       : []),
     ...(showFinance ? [{ to: routes.finance.root, label: 'Finance' }] : []),
     ...(showInterview ? [{ to: routes.interview.root, label: 'Interview' }] : []),
-    ...(showVisa ? [{ to: routes.visa.root, label: 'Visa' }] : []),
+    ...(showVisa ? [{ to: routes.visa.root, label: 'File Making' }] : []),
     { to: routes.messages.root, label: 'Messages', unread: messagesUnread },
     ...(showTeam ? [{ to: routes.team.root, label: 'Team & access' }] : []),
   ];
@@ -97,10 +117,11 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
     { to: StudentRoutes.home, label: 'Dashboard' },
     { to: StudentRoutes.profile, label: 'Personal info' },
     { to: StudentRoutes.documents, label: 'Documents' },
+    { to: StudentRoutes.formTemplates, label: 'Form templates' },
     { to: StudentRoutes.universities, label: 'Universities' },
     { to: StudentRoutes.chargeReceipts, label: 'Charge receipts' },
     { to: StudentRoutes.interview, label: 'Interview' },
-    { to: StudentRoutes.visaAppointments, label: 'Visa appointments' },
+    { to: StudentRoutes.visaAppointments, label: 'File Making appointments' },
     { to: StudentRoutes.status, label: 'My status' },
     { to: StudentRoutes.messages, label: 'Messages', unread: messagesUnread },
   ];
@@ -148,7 +169,8 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
                   <span className="shell-nav-indicator" aria-hidden />
                   <span className="shell-nav-label-row">
                     <span>{item.label}</span>
-                    {item.to === messagesPath && (item.unread ?? 0) > 0 ? (
+                    {(item.to === messagesPath || item.to === suggestionsPath) &&
+                    (item.unread ?? 0) > 0 ? (
                       <span className="shell-nav-badge">
                         {item.unread! > 99 ? '99+' : item.unread}
                       </span>

@@ -81,12 +81,15 @@ export type StudentProfile = {
 
 export type ChatConversation = {
   id: number;
+  kind?: 'student_department' | 'staff_dm';
   department?: string | null;
   department_label?: string | null;
   other_user: {
     id: number | null;
     name: string | null;
     email: string | null;
+    staff_department?: string | null;
+    staff_department_label?: string | null;
   };
   last_message: {
     id: number;
@@ -98,6 +101,21 @@ export type ChatConversation = {
   other_user_typing?: boolean;
   unread_count?: number;
   is_blocked?: boolean;
+};
+
+export type ChatStudentBlock = {
+  student_id: number;
+  student: {
+    id: number | null;
+    name: string | null;
+    email: string | null;
+  };
+  blocked_by: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  blocked_at: string | null;
 };
 
 export type UserNotification = {
@@ -149,6 +167,37 @@ export type University = {
   description: string | null;
   is_visible_to_students: boolean;
   required_documents: { type: DocumentType; label: string }[];
+  selection_source?: 'staff_shared' | 'student_selected' | null;
+  notes?: string | null;
+  consultant?: { id: number; name: string; email: string } | null;
+  created_at: string | null;
+};
+
+export type UniversitySuggestion = {
+  id: number;
+  country: string;
+  name: string;
+  city: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  status_label: string;
+  university_id: number | null;
+  university?: {
+    id: number;
+    name: string;
+    country: string;
+    city: string | null;
+  } | null;
+  student?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  reviewed_by?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  reviewed_at: string | null;
   created_at: string | null;
 };
 
@@ -170,6 +219,39 @@ export type ChargeReceipt = {
   reviewed_at?: string | null;
   consultant_file: ChargeReceiptFile;
   student_file: ChargeReceiptFile | null;
+  student?: StudentSummary;
+  created_at: string | null;
+};
+
+export type FormTemplateField = {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'checkbox';
+  required: boolean;
+};
+
+export type FormTemplateDefinition = {
+  key: string;
+  title: string;
+  letter_body: string;
+  fields: FormTemplateField[];
+};
+
+export type FormTemplateAnswers = Record<string, string | boolean>;
+
+export type FormTemplateAssignment = {
+  id: number;
+  template_key: string;
+  title: string;
+  instructions: string | null;
+  letter_body: string;
+  fields: FormTemplateField[];
+  answers: FormTemplateAnswers | null;
+  status: 'awaiting_student' | 'awaiting_review' | 'approved' | 'rejected';
+  status_label: string;
+  rejection_reason: string | null;
+  reviewed_at?: string | null;
+  sender?: StudentSummary | null;
   student?: StudentSummary;
   created_at: string | null;
 };
@@ -222,6 +304,34 @@ export type ApplicationChecklistItem = {
   total: number;
 };
 
+export type UniversityDocumentsChecklist = {
+  required: number;
+  covered: number;
+  pending: number;
+  action_needed: number;
+  complete: boolean;
+  missing: Array<{
+    type: DocumentType;
+    label: string;
+    status: 'missing' | 'pending' | 'rejected' | 'approved';
+  }>;
+};
+
+export type UrgentDocumentsChecklist = {
+  required: number;
+  covered: number;
+  pending: number;
+  action_needed: number;
+  complete: boolean;
+  missing: Array<{
+    id: number;
+    type: DocumentType;
+    label: string;
+    status: 'missing' | 'pending' | 'rejected' | 'approved';
+    note: string | null;
+  }>;
+};
+
 /** Which department in the chain may start work on this student. */
 export type ApplicationHandoff = {
   documents_approved: boolean;
@@ -233,12 +343,27 @@ export type ApplicationStatusResponse = {
   application: StudentApplication;
   checklist: {
     documents: ApplicationChecklistItem;
+    urgent_documents?: UrgentDocumentsChecklist;
+    university_documents?: UniversityDocumentsChecklist;
     charge_receipts: ApplicationChecklistItem;
   };
   handoff: ApplicationHandoff;
   preparation_available: boolean;
   interview_available: boolean;
   current_status: string;
+};
+
+export type UrgentDocumentRequest = {
+  id: number;
+  student_id: number;
+  document_type: DocumentType;
+  document_type_label: string;
+  note: string | null;
+  requested_by: number;
+  resolved_at: string | null;
+  created_at: string | null;
+  is_open: boolean;
+  requester?: StudentSummary | null;
 };
 
 export type InterviewVideoRoom = {

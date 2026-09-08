@@ -129,7 +129,10 @@ export function StudentHome({ user, token, onLogout }: Props) {
     () => profileSectionProgress(profileQuery.data),
     [profileQuery.data],
   );
-  const documentsProgress = useMemo(() => documentsSectionProgress(docs), [docs]);
+  const documentsProgress = useMemo(
+    () => documentsSectionProgress(docs, universities),
+    [docs, universities],
+  );
   const universitiesProgress = useMemo(
     () => universitiesSectionProgress(universities, docs),
     [universities, docs],
@@ -214,6 +217,16 @@ export function StudentHome({ user, token, onLogout }: Props) {
                 onPress: () => router.push('/student-documents'),
               },
               {
+                title: 'Form templates',
+                description: 'Complete the Sponsorship letter sent by Student Info.',
+                meta: 'Fill in the app',
+                color: theme.cardCoral,
+                glyph: '📝',
+                progressPercent: 0,
+                actionLabel: 'Open',
+                onPress: () => router.push('/student-form-templates'),
+              },
+              {
                 title: 'Universities',
                 description: universitiesQuery.isLoading
                   ? 'Loading university progress…'
@@ -273,7 +286,7 @@ export function StudentHome({ user, token, onLogout }: Props) {
                 onPress: () => router.push('/student-interview'),
               },
               {
-                title: 'Visa appointments',
+                title: 'File Making appointments',
                 description: appointmentsQuery.isLoading
                   ? 'Loading visa progress…'
                   : visaProgress.report,
@@ -374,6 +387,11 @@ export function StudentHome({ user, token, onLogout }: Props) {
             emoji: '📄',
             label: 'Documents',
             onPress: () => router.push('/student-documents'),
+          },
+          {
+            emoji: '📝',
+            label: 'Form templates',
+            onPress: () => router.push('/student-form-templates'),
           },
           {
             emoji: '🎓',

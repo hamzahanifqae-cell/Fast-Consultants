@@ -5,6 +5,7 @@ type IconName =
   | 'message.fill'
   | 'bell.fill'
   | 'paperplane.fill'
+  | 'paperclip'
   | 'chevron.right'
   | 'chevron.down'
   | 'chevron.left';
@@ -16,6 +17,8 @@ const SVG_PATHS: Partial<Record<IconName, string>> = {
   'message.fill':
     'M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9.4L5.7 20.3A1 1 0 0 1 4 19.5V6a2 2 0 0 1 2-2Z',
   'paperplane.fill': 'M3.4 11.2 20.1 3.4a1 1 0 0 1 1.3 1.2L14.6 21a1 1 0 0 1-1.8.1l-2.6-5.9-5.9-2.6a1 1 0 0 1-.9-1.4Z',
+  paperclip:
+    'M16.5 6.5v8.8a4.5 4.5 0 1 1-9 0V6.2a2.7 2.7 0 1 1 5.4 0v8.4a.9.9 0 1 1-1.8 0V6.5a.9.9 0 1 0-1.8 0v8.5a2.7 2.7 0 1 0 5.4 0V6.2a4.5 4.5 0 1 0-9 0v9.1a6.3 6.3 0 1 0 12.6 0V6.5a.9.9 0 1 0-1.8 0Z',
 };
 
 const EMOJI: Partial<Record<IconName, string>> = {

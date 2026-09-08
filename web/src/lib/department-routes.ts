@@ -17,10 +17,14 @@ export function departmentRoutes(portal: Exclude<Portal, 'student'>) {
     documents: {
       root: `${base}/departments/documents`,
     },
+    formTemplates: {
+      root: `${base}/departments/form-templates`,
+    },
     universities: {
       root: `${base}/departments/universities`,
       catalog: `${base}/departments/universities/catalog`,
       share: `${base}/departments/universities/share`,
+      suggestions: `${base}/departments/universities/suggestions`,
     },
     finance: {
       root: `${base}/departments/finance`,
@@ -46,6 +50,7 @@ export const StudentRoutes = {
   register: '/student/register',
   profile: '/student/profile',
   documents: '/student/documents',
+  formTemplates: '/student/form-templates',
   universities: '/student/universities',
   chargeReceipts: '/student/charge-receipts',
   preparation: '/student/preparation',
@@ -90,6 +95,7 @@ export function mapNotificationAction(
     '/departments/student-info/students': routes.studentInfo.students,
     '/departments/student-info/documents': routes.documents.root,
     '/departments/documents': routes.documents.root,
+    '/departments/form-templates': routes.formTemplates.root,
     '/departments/universities': routes.universities.root,
     '/departments/universities/catalog': routes.universities.catalog,
     '/departments/universities/share': routes.universities.share,

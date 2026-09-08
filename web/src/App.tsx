@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+import { ChatFab } from '@/components/chat-fab';
 import { GuestOnly, PortalGuestOnly, RequirePortal } from '@/components/route-guards';
 import { NavigationProgress } from '@/components/navigation-progress';
 import { PortalAuthSync } from '@/components/portal-auth-sync';
@@ -8,10 +9,12 @@ import { ScrollToTop } from '@/components/scroll-to-top';
 import { AppProviders } from '@/providers/app-providers';
 import { ConsultantDocumentsPage } from '@/pages/consultant-documents-page';
 import { ConsultantFinancePage } from '@/pages/consultant-finance-page';
+import { ConsultantFormTemplatesPage } from '@/pages/consultant-form-templates-page';
 import { ConsultantStudentDetailPage } from '@/pages/consultant-student-detail-page';
 import { ConsultantStudentsPage } from '@/pages/consultant-students-page';
 import { ConsultantUniversitiesCatalogPage } from '@/pages/consultant-universities-catalog-page';
 import { ConsultantUniversitiesPage } from '@/pages/consultant-universities-page';
+import { ConsultantUniversitySuggestionsPage } from '@/pages/consultant-university-suggestions-page';
 import { ConsultantVisaPage } from '@/pages/consultant-visa-page';
 import { HomePage } from '@/pages/home-page';
 import { LandingPage } from '@/pages/landing-page';
@@ -21,6 +24,7 @@ import { OrganizationTeamPage } from '@/pages/organization-team-page';
 import { RegisterPage, TeamRegisterBlocked } from '@/pages/register-page';
 import { StudentChargeReceiptsPage } from '@/pages/student-charge-receipts-page';
 import { StudentDocumentsPage } from '@/pages/student-documents-page';
+import { StudentFormTemplatesPage } from '@/pages/student-form-templates-page';
 import { StudentInfoDepartmentPage } from '@/pages/student-info-department-page';
 import { StudentInterviewPage } from '@/pages/student-interview-page';
 import { StudentPreparationPage } from '@/pages/student-preparation-page';
@@ -53,6 +57,7 @@ export default function App() {
         <NavigationProgress />
         <PortalAuthSync />
         <SaveFeedbackBar />
+        <ChatFab />
         <Routes>
           <Route element={<GuestOnly />}>
             <Route path="/" element={<LandingPage />} />
@@ -71,6 +76,7 @@ export default function App() {
               <Route path="home" element={<HomePage />} />
               <Route path="profile" element={<StudentProfilePage />} />
               <Route path="documents" element={<StudentDocumentsPage />} />
+              <Route path="form-templates" element={<StudentFormTemplatesPage />} />
               <Route path="universities" element={<StudentUniversitiesPage />} />
               <Route path="charge-receipts" element={<StudentChargeReceiptsPage />} />
               <Route path="preparation" element={<StudentPreparationPage />} />
@@ -100,12 +106,17 @@ export default function App() {
                 element={<Navigate to="/superadmin/departments/documents" replace />}
               />
               <Route path="departments/documents" element={<ConsultantDocumentsPage />} />
+              <Route path="departments/form-templates" element={<ConsultantFormTemplatesPage />} />
               <Route path="departments/universities" element={<UniversitiesDepartmentPage />} />
               <Route
                 path="departments/universities/catalog"
                 element={<ConsultantUniversitiesCatalogPage />}
               />
               <Route path="departments/universities/share" element={<ConsultantUniversitiesPage />} />
+              <Route
+                path="departments/universities/suggestions"
+                element={<ConsultantUniversitySuggestionsPage />}
+              />
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />
@@ -133,12 +144,17 @@ export default function App() {
                 element={<Navigate to="/staff/departments/documents" replace />}
               />
               <Route path="departments/documents" element={<ConsultantDocumentsPage />} />
+              <Route path="departments/form-templates" element={<ConsultantFormTemplatesPage />} />
               <Route path="departments/universities" element={<UniversitiesDepartmentPage />} />
               <Route
                 path="departments/universities/catalog"
                 element={<ConsultantUniversitiesCatalogPage />}
               />
               <Route path="departments/universities/share" element={<ConsultantUniversitiesPage />} />
+              <Route
+                path="departments/universities/suggestions"
+                element={<ConsultantUniversitySuggestionsPage />}
+              />
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />

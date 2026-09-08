@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
@@ -11,8 +11,21 @@ import { api, getApiErrorMessage } from '@/lib/api';
 import { departmentRoutes } from '@/lib/department-routes';
 import { orgPortalForUser } from '@/lib/portals';
 import { useAuthStore } from '@/stores/auth-store';
-import type { University } from '@/types/auth';
+import type { DocumentType, University } from '@/types/auth';
 import './dashboard.css';
+
+const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'cnic', label: 'CNIC' },
+  { value: 'metric', label: 'Matric' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'transcript', label: 'Transcript' },
+  { value: 'degree_certificate', label: 'Degree certificate' },
+  { value: 'diploma', label: 'Diploma' },
+  { value: 'english_test', label: 'IELTS score' },
+  { value: 'recommendation_letter', label: 'Recommendation letter' },
+  { value: 'other', label: 'Other' },
+];
 
 export function ConsultantUniversitiesPage() {
   const queryClient = useQueryClient();
@@ -22,6 +35,7 @@ export function ConsultantUniversitiesPage() {
   const { studentId, selectStudent, clearStudent } = useDepartmentStudentParam();
   const [assignId, setAssignId] = useState('');
   const [assignNotes, setAssignNotes] = useState('');
+  const [requiredDocs, setRequiredDocs] = useState<DocumentType[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const catalogQuery = useQuery({
@@ -64,18 +78,36 @@ export function ConsultantUniversitiesPage() {
     [availableToAssign],
   );
 
+  const selectedUniversity = useMemo(
+    () => availableToAssign.find((item) => String(item.id) === assignId) ?? null,
+    [availableToAssign, assignId],
+  );
+
+  useEffect(() => {
+    if (!selectedUniversity) {
+      setRequiredDocs([]);
+      return;
+    }
+    setRequiredDocs(
+      (selectedUniversity.required_documents ?? []).map((item) => item.type as DocumentType),
+    );
+  }, [selectedUniversity]);
+
   const assignUniversity = useMutation({
     mutationFn: async () => {
       await api.post(`/consultant/students/${studentId}/universities`, {
         university_id: Number(assignId),
         notes: assignNotes.trim() || null,
+        required_documents: requiredDocs,
       });
     },
     onSuccess: async () => {
       setAssignId('');
       setAssignNotes('');
+      setRequiredDocs([]);
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ['student-assigned-universities', studentId] });
+      await queryClient.invalidateQueries({ queryKey: ['consultant-universities'] });
     },
     onError: (err) => setError(getApiErrorMessage(err, 'Could not share university.')),
   });
@@ -89,10 +121,20 @@ export function ConsultantUniversitiesPage() {
     },
   });
 
+  function toggleDoc(type: DocumentType) {
+    setRequiredDocs((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
+    );
+  }
+
   function onAssign(event: FormEvent) {
     event.preventDefault();
     if (!assignId) {
       setError('Choose a university to share.');
+      return;
+    }
+    if (requiredDocs.length === 0) {
+      setError('Select at least one required document before sharing.');
       return;
     }
     assignUniversity.mutate();
@@ -107,6 +149,10 @@ export function ConsultantUniversitiesPage() {
       <p className="muted" style={{ marginTop: 0 }}>
         <Link className="text-link-btn" to={routes.universities.catalog}>
           Open catalog
+        </Link>
+        {' · '}
+        <Link className="text-link-btn" to={routes.universities.suggestions}>
+          Suggested universities
         </Link>
       </p>
 
@@ -126,7 +172,15 @@ export function ConsultantUniversitiesPage() {
               <div key={university.id} className="stack-item org-member">
                 <div>
                   <strong>{university.name}</strong>
-                  <span>{[university.city, university.country].filter(Boolean).join(', ')}</span>
+                  <span>
+                    {[university.city, university.country].filter(Boolean).join(', ')}
+                  </span>
+                  {(university.required_documents ?? []).length > 0 ? (
+                    <span>
+                      Required:{' '}
+                      {(university.required_documents ?? []).map((doc) => doc.label).join(', ')}
+                    </span>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -137,7 +191,9 @@ export function ConsultantUniversitiesPage() {
               </div>
             ))}
             {!assignedQuery.isLoading && (assignedQuery.data ?? []).length === 0 ? (
-              <p className="muted">No universities shared yet. Assign one below.</p>
+              <p className="muted">
+                No universities yet. Students can suggest options, or share from the catalog below.
+              </p>
             ) : null}
           </div>
 
@@ -155,6 +211,21 @@ export function ConsultantUniversitiesPage() {
                 onChange={setAssignId}
               />
             </label>
+            {assignId ? (
+              <div className="org-permissions">
+                <legend>Required documents</legend>
+                {DOCUMENT_TYPES.map((doc) => (
+                  <label key={doc.value} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={requiredDocs.includes(doc.value)}
+                      onChange={() => toggleDoc(doc.value)}
+                    />
+                    {doc.label}
+                  </label>
+                ))}
+              </div>
+            ) : null}
             <label className="field">
               <span>Note for student (optional)</span>
               <input

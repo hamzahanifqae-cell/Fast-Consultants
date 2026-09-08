@@ -65,7 +65,7 @@ class VisaAppointmentController extends Controller
         $this->notifications->createForStudent(
             $appointment->student,
             $request->user(),
-            'A visa appointment was scheduled'
+            'A File Making appointment was scheduled'
                 .($appointment->scheduled_at ? ' for '.$appointment->scheduled_at->toDayDateTimeString() : '')
                 .'.',
             'visa_appointment_scheduled',
@@ -75,7 +75,7 @@ class VisaAppointmentController extends Controller
         $this->notifications->notifyDepartment(
             StaffDepartment::Visa,
             $request->user(),
-            'Visa appointment scheduled for '.$appointment->student->name.'.',
+            'File Making appointment scheduled for '.$appointment->student->name.'.',
             'visa_appointment_scheduled',
             '/departments/visa',
         );
@@ -96,7 +96,7 @@ class VisaAppointmentController extends Controller
         $this->notifications->createForStudent(
             $visaAppointment->student,
             $request->user(),
-            'Your visa appointment was updated ('.$visaAppointment->status->label().').',
+            'Your File Making appointment was updated ('.$visaAppointment->status->label().').',
             'visa_appointment_updated',
             '/student-status',
         );
@@ -110,7 +110,7 @@ class VisaAppointmentController extends Controller
         $visaAppointment->delete();
 
         return response()->json([
-            'message' => 'Visa appointment removed.',
+            'message' => 'File Making appointment removed.',
         ]);
     }
 }

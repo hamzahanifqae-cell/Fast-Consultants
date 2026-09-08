@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DocumentType;
 use App\Enums\StaffDepartment;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UniversityResource;
 use App\Models\University;
+use App\Models\UniversitySuggestion;
 use App\Models\User;
 use App\Services\DepartmentHandoffService;
 use App\Services\StudentNotificationService;
@@ -49,14 +51,18 @@ class StudentUniversityController extends Controller
         $validated = $request->validate([
             'university_id' => ['required', 'integer', Rule::exists('universities', 'id')],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'required_documents' => ['required', 'array', 'min:1'],
+            'required_documents.*' => ['required', 'string', Rule::enum(DocumentType::class)],
         ]);
 
         $university = University::query()->findOrFail($validated['university_id']);
+        $university->syncRequiredDocumentTypes($validated['required_documents']);
 
         $student->assignedUniversities()->syncWithoutDetaching([
             $university->id => [
                 'assigned_by' => $request->user()->id,
                 'notes' => $validated['notes'] ?? null,
+                'source' => 'staff_shared',
             ],
         ]);
 
@@ -65,9 +71,9 @@ class StudentUniversityController extends Controller
         $this->notifications->createForStudent(
             $student,
             $request->user(),
-            'A university option was shared with you: '.$university->name.'.',
+            'A university option was shared with you: '.$university->name.'. Please upload any required documents listed for it.',
             'university_assigned',
-            '/student-universities',
+            '/student-documents',
         );
 
         $this->handoffs->syncUniversities($student, $request->user());
@@ -83,6 +89,17 @@ class StudentUniversityController extends Controller
         abort_unless($student->isStudent(), 404);
 
         $student->assignedUniversities()->detach($university->id);
+
+        UniversitySuggestion::query()
+            ->where('student_id', $student->id)
+            ->where(function ($query) use ($university) {
+                $query->where('university_id', $university->id)
+                    ->orWhere(function ($inner) use ($university) {
+                        $inner->where('country', $university->country)
+                            ->whereRaw('LOWER(name) = ?', [mb_strtolower($university->name)]);
+                    });
+            })
+            ->delete();
 
         $this->handoffs->syncUniversities($student, $request->user());
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Redirect, router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { DepartmentStudentGate } from '@/components/department-student-gate';
@@ -13,7 +13,20 @@ import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-hando
 import { api, getApiErrorMessage } from '@/lib/api';
 import { isOrganizationUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
-import type { StudentSummary, University } from '@/types/auth';
+import type { DocumentType, StudentSummary, University } from '@/types/auth';
+
+const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'cnic', label: 'CNIC' },
+  { value: 'metric', label: 'Matric' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'transcript', label: 'Transcript' },
+  { value: 'degree_certificate', label: 'Degree certificate' },
+  { value: 'diploma', label: 'Diploma' },
+  { value: 'english_test', label: 'IELTS score' },
+  { value: 'recommendation_letter', label: 'Recommendation letter' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function ConsultantUniversitiesScreen() {
   const theme = useTheme();
@@ -24,6 +37,7 @@ export default function ConsultantUniversitiesScreen() {
 
   const [selected, setSelected] = useState<StudentSummary | null>(null);
   const [assignId, setAssignId] = useState<number | null>(null);
+  const [requiredDocs, setRequiredDocs] = useState<DocumentType[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const studentId = selected?.id ?? null;
@@ -61,18 +75,36 @@ export default function ConsultantUniversitiesScreen() {
     [catalogQuery.data, assignedIds],
   );
 
+  const selectedUniversity = useMemo(
+    () => available.find((item) => item.id === assignId) ?? null,
+    [available, assignId],
+  );
+
+  useEffect(() => {
+    if (!selectedUniversity) {
+      setRequiredDocs([]);
+      return;
+    }
+    setRequiredDocs(
+      (selectedUniversity.required_documents ?? []).map((item) => item.type as DocumentType),
+    );
+  }, [selectedUniversity]);
+
   const assignUniversity = useMutation({
     mutationFn: async () => {
       await api.post(`/consultant/students/${studentId}/universities`, {
         university_id: assignId,
+        required_documents: requiredDocs,
       });
     },
     onSuccess: async () => {
       setAssignId(null);
+      setRequiredDocs([]);
       setError(null);
       await queryClient.invalidateQueries({
         queryKey: ['student-assigned-universities', studentId],
       });
+      await queryClient.invalidateQueries({ queryKey: ['consultant-universities'] });
     },
     onError: (err) => setError(getApiErrorMessage(err, 'Could not share university.')),
   });
@@ -87,6 +119,24 @@ export default function ConsultantUniversitiesScreen() {
       });
     },
   });
+
+  function toggleDoc(type: DocumentType) {
+    setRequiredDocs((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
+    );
+  }
+
+  function onShare() {
+    if (!assignId) {
+      setError('Choose a university to share.');
+      return;
+    }
+    if (requiredDocs.length === 0) {
+      setError('Select at least one required document before sharing.');
+      return;
+    }
+    assignUniversity.mutate();
+  }
 
   if (!token || !user) {
     return <Redirect href="/login" />;
@@ -103,12 +153,16 @@ export default function ConsultantUniversitiesScreen() {
           Open catalog →
         </ThemedText>
       </Pressable>
+      <Pressable onPress={() => router.push('/consultant-university-suggestions')}>
+        <ThemedText type="smallBold" style={{ color: theme.primary }}>
+          Student suggestions →
+        </ThemedText>
+      </Pressable>
 
       <DepartmentStudentGate
         selectedId={studentId}
         onSelect={setSelected}
-        onClear={() => setSelected(null)}
-        hint="Choose a student to share catalog options with them.">
+        onClear={() => setSelected(null)}>
         {error ? (
           <ThemedText type="small" style={styles.error}>
             {error}
@@ -131,6 +185,12 @@ export default function ConsultantUniversitiesScreen() {
                 <ThemedText type="caption" themeColor="textSecondary">
                   {[university.city, university.country].filter(Boolean).join(', ')}
                 </ThemedText>
+                {(university.required_documents ?? []).length > 0 ? (
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    Required:{' '}
+                    {(university.required_documents ?? []).map((doc) => doc.label).join(', ')}
+                  </ThemedText>
+                ) : null}
               </View>
               <Pressable onPress={() => removeAssignment.mutate(university.id)}>
                 <ThemedText type="smallBold" style={styles.error}>
@@ -141,7 +201,7 @@ export default function ConsultantUniversitiesScreen() {
           ))}
           {!assignedQuery.isLoading && (assignedQuery.data ?? []).length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary">
-              No universities shared yet.
+              No universities yet. Students can suggest options, or share from the catalog below.
             </ThemedText>
           ) : null}
         </ThemedView>
@@ -167,9 +227,35 @@ export default function ConsultantUniversitiesScreen() {
               All catalog universities are already shared, or the catalog is empty.
             </ThemedText>
           ) : null}
+
+          {assignId ? (
+            <View style={styles.docBlock}>
+              <ThemedText type="smallBold">Required documents</ThemedText>
+              <View style={styles.chips}>
+                {DOCUMENT_TYPES.map((item) => {
+                  const active = requiredDocs.includes(item.value);
+                  return (
+                    <Pressable
+                      key={item.value}
+                      onPress={() => toggleDoc(item.value)}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: active ? theme.successMuted : theme.inputFill,
+                          borderColor: theme.border,
+                        },
+                      ]}>
+                      <ThemedText type="smallBold">{item.label}</ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           <Pressable
             disabled={!assignId || assignUniversity.isPending || Boolean(shareLock)}
-            onPress={() => assignUniversity.mutate()}
+            onPress={onShare}
             style={[
               styles.button,
               { backgroundColor: theme.inverted, opacity: assignId && !shareLock ? 1 : 0.5 },
@@ -198,6 +284,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   copy: { flex: 1, gap: 2 },
+  docBlock: { gap: Spacing.two, marginTop: Spacing.one },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   button: {
     borderRadius: 999,
     alignItems: 'center',

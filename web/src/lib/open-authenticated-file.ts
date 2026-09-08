@@ -89,6 +89,9 @@ function showFilePreview({ blob: _blob, contentType, objectUrl, title }: Fetched
 
   const isImage = contentType.startsWith('image/');
   const isPdf = contentType === 'application/pdf' || title.toLowerCase().endsWith('.pdf');
+  const isVideo =
+    contentType.startsWith('video/') ||
+    /\.(mp4|mov|webm|m4v|avi)$/i.test(title);
 
   if (isImage) {
     const image = document.createElement('img');
@@ -102,6 +105,13 @@ function showFilePreview({ blob: _blob, contentType, objectUrl, title }: Fetched
     frame.src = objectUrl;
     frame.title = title;
     body.append(frame);
+  } else if (isVideo) {
+    const video = document.createElement('video');
+    video.className = 'file-preview-video';
+    video.src = objectUrl;
+    video.controls = true;
+    video.playsInline = true;
+    body.append(video);
   } else {
     const message = document.createElement('p');
     message.className = 'muted';

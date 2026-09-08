@@ -41,7 +41,7 @@ class StudentApplicationController extends Controller
                 'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
-                'current_status' => $payload['application']->stage->label(),
+                'current_status' => $payload['current_status'],
             ],
         ]);
     }
@@ -72,7 +72,7 @@ class StudentApplicationController extends Controller
                 'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
-                'current_status' => $payload['application']->stage->label(),
+                'current_status' => $payload['current_status'],
             ],
         ]);
     }
@@ -225,7 +225,7 @@ class StudentApplicationController extends Controller
                 'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
-                'current_status' => $payload['application']->stage->label(),
+                'current_status' => $payload['current_status'],
             ],
         ]);
     }
@@ -256,7 +256,7 @@ class StudentApplicationController extends Controller
                 'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
-                'current_status' => $payload['application']->stage->label(),
+                'current_status' => $payload['current_status'],
             ],
         ]);
     }
@@ -322,7 +322,7 @@ class StudentApplicationController extends Controller
                 'handoff' => $payload['handoff'],
                 'preparation_available' => $payload['preparation_available'],
                 'interview_available' => $payload['interview_available'],
-                'current_status' => $payload['application']->stage->label(),
+                'current_status' => $payload['current_status'],
             ],
             'message' => $preference === InterviewFollowupPreference::WantAnother
                 ? 'Thanks, preparation staff will schedule another meeting.'

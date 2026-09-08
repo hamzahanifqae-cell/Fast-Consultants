@@ -16,7 +16,7 @@ enum StaffDepartment: string
             self::Universities => 'Universities Related',
             self::Finance => 'A/C & Finance',
             self::StudentInfo => 'Student Info Collector',
-            self::Visa => 'VISA Related',
+            self::Visa => 'File Making Related',
             self::Interview => 'Interview',
         };
     }

@@ -19,9 +19,9 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
   const showInterview = focus === 'all' || focus === 'interview';
   const showVisa = focus === 'all' || focus === 'visa';
   const shellTitle =
-    focus === 'interview' ? 'Interview' : focus === 'visa' ? 'Visa' : 'Visa & Interview';
+    focus === 'interview' ? 'Interview' : focus === 'visa' ? 'File Making' : 'File Making & Interview';
   const shellBadge =
-    focus === 'interview' ? 'Interview' : focus === 'visa' ? 'VISA' : 'Visa & Interview';
+    focus === 'interview' ? 'Interview' : focus === 'visa' ? 'File Making' : 'File Making & Interview';
 
   const { studentId, selected, selectStudent, clearStudent } = useDepartmentStudentParam();
   const [prepTitle, setPrepTitle] = useState('');
@@ -302,7 +302,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
 
           {showVisa ? (
             <section className="panel">
-              <h2>Visa appointments</h2>
+              <h2>File Making appointments</h2>
               <div className="stack-list">
                 {(appointmentsQuery.data ?? []).map((appointment) => (
                   <div key={appointment.id} className="stack-item org-member">
@@ -346,7 +346,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   </div>
                 ))}
                 {(appointmentsQuery.data?.length ?? 0) === 0 ? (
-                  <p className="muted">No visa appointments for this student yet.</p>
+                  <p className="muted">No File Making appointments for this student yet.</p>
                 ) : null}
               </div>
 
@@ -387,7 +387,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   className="primary-btn"
                   type="submit"
                   disabled={createAppointment.isPending}>
-                  Schedule visa appointment
+                  Schedule File Making appointment
                 </button>
               </form>
             </section>

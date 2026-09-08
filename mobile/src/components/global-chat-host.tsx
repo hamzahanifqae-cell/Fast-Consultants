@@ -1,13 +1,17 @@
+import { StyleSheet, View } from 'react-native';
+
+import { ChatFab } from '@/components/chat-fab';
 import { ChatPanel } from '@/components/chat-panel';
+import { isOrganizationUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatUiStore } from '@/stores/chat-ui-store';
-import { isOrganizationUser } from '@/lib/roles';
 
 export function GlobalChatHost() {
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
   const visible = useChatUiStore((state) => state.visible);
   const conversationId = useChatUiStore((state) => state.conversationId);
+  const open = useChatUiStore((state) => state.open);
   const close = useChatUiStore((state) => state.close);
 
   if (!token || !user) {
@@ -17,11 +21,21 @@ export function GlobalChatHost() {
   const isConsultant = isOrganizationUser(user);
 
   return (
-    <ChatPanel
-      isConsultant={isConsultant}
-      initialConversationId={conversationId}
-      onClose={close}
-      visible={visible}
-    />
+    <View pointerEvents="box-none" style={styles.host}>
+      {!visible ? <ChatFab onPress={() => open()} /> : null}
+      <ChatPanel
+        isConsultant={isConsultant}
+        initialConversationId={conversationId}
+        onClose={close}
+        visible={visible}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  host: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+});

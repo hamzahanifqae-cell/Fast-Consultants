@@ -5,21 +5,27 @@ namespace App\Http\Controllers\Api;
 use App\Enums\Role;
 use App\Enums\StaffDepartment;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\BroadcastChatMessageRequest;
 use App\Http\Requests\Api\SendChatMessageRequest;
 use App\Http\Requests\Api\SetChatTypingRequest;
 use App\Http\Requests\Api\StartChatRequest;
+use App\Http\Requests\Api\StartStaffChatRequest;
 use App\Models\ChatConversation;
 use App\Models\ChatConversationRead;
 use App\Models\ChatMessage;
+use App\Models\ChatScheduledMessage;
 use App\Models\ChatStudentBlock;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\StudentNotificationService;
+use App\Support\UploadStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
@@ -48,11 +54,15 @@ class ChatController extends Controller
             ->with([
                 'student:id,name,email',
                 'consultant:id,name,email',
+                'staffLow:id,name,email,staff_department',
+                'staffHigh:id,name,email,staff_department',
                 'latestMessage.sender:id,name',
             ])
             ->when(
                 $user->isStudent(),
-                fn (Builder $query) => $query->where('student_id', $user->id),
+                fn (Builder $query) => $query
+                    ->where('kind', ChatConversation::KIND_STUDENT_DEPARTMENT)
+                    ->where('student_id', $user->id),
                 fn (Builder $query) => $this->scopeVisibleToOrganization($query, $user),
             )
             ->orderByDesc('last_message_at')
@@ -99,17 +109,19 @@ class ChatController extends Controller
                 ->pluck('aggregate', 'conversation_id');
         }
 
-        $blockKeys = ChatStudentBlock::query()
-            ->whereIn('student_id', $conversations->pluck('student_id')->unique()->filter())
-            ->get(['student_id', 'department'])
-            ->map(fn (ChatStudentBlock $block) => $this->blockKey((int) $block->student_id, $block->department))
+        $blockedStudentIds = ChatStudentBlock::query()
+            ->whereIn(
+                'student_id',
+                $conversations->pluck('student_id')->unique()->filter()->values()->all(),
+            )
+            ->pluck('student_id')
             ->flip();
 
-        $payload = $conversations->map(function (ChatConversation $conversation) use ($user, $unreadByConversation, $blockKeys) {
+        $payload = $conversations->map(function (ChatConversation $conversation) use ($user, $unreadByConversation, $blockedStudentIds) {
             $conversation->unread_count = (int) ($unreadByConversation[$conversation->id] ?? 0);
-            $conversation->is_blocked = $blockKeys->has(
-                $this->blockKey($conversation->student_id, $conversation->department)
-            );
+            $conversation->is_blocked = $conversation->student_id
+                ? $blockedStudentIds->has($conversation->student_id)
+                : false;
 
             return $this->conversationPayload($conversation, $user);
         });
@@ -131,6 +143,7 @@ class ChatController extends Controller
             [
                 'student_id' => $student->id,
                 'department' => $department,
+                'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
             ],
         );
 
@@ -159,6 +172,157 @@ class ChatController extends Controller
         ], 201);
     }
 
+    public function staffDirectory(Request $request): JsonResponse
+    {
+        $viewer = $request->user();
+        abort_unless($viewer->isConsultant(), 403);
+
+        $staff = User::query()
+            ->where('id', '!=', $viewer->id)
+            ->whereHas('roles', function (Builder $roles) {
+                $roles->whereIn('name', [
+                    Role::SuperAdmin->value,
+                    Role::Admin->value,
+                    Role::Staff->value,
+                    Role::Consultant->value,
+                ]);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'staff_department']);
+
+        return response()->json([
+            'data' => $staff->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'staff_department' => $user->staff_department?->value,
+                'staff_department_label' => $user->staff_department?->label(),
+            ])->values(),
+        ]);
+    }
+
+    public function startStaff(StartStaffChatRequest $request): JsonResponse
+    {
+        $viewer = $request->user();
+        $peerId = (int) $request->integer('peer_user_id');
+        $peer = User::query()->findOrFail($peerId);
+
+        abort_unless($peer->isConsultant(), 422, 'You can only message organization staff.');
+        abort_unless($viewer->id !== $peer->id, 422, 'You cannot message yourself.');
+
+        [$lowId, $highId] = ChatConversation::orderedStaffPair($viewer->id, $peer->id);
+
+        $conversation = ChatConversation::query()->firstOrCreate(
+            [
+                'kind' => ChatConversation::KIND_STAFF_DM,
+                'staff_low_id' => $lowId,
+                'staff_high_id' => $highId,
+            ],
+            [
+                'student_id' => null,
+                'department' => null,
+                'consultant_id' => null,
+            ],
+        );
+
+        if ($request->filled('message')) {
+            $this->storeMessage($conversation, $viewer->id, $request->string('message')->toString());
+        }
+
+        $this->markConversationRead($conversation, $viewer);
+
+        $conversation->load([
+            'student:id,name,email',
+            'consultant:id,name,email',
+            'staffLow:id,name,email,staff_department',
+            'staffHigh:id,name,email,staff_department',
+            'latestMessage.sender:id,name',
+            'messages.sender:id,name',
+        ]);
+        $conversation->unread_count = 0;
+        $conversation->is_blocked = false;
+
+        return response()->json([
+            'data' => [
+                'conversation' => $this->conversationPayload($conversation, $viewer),
+                'messages' => $conversation->messages
+                    ->map(fn (ChatMessage $message) => $this->messagePayload($message, $viewer->id))
+                    ->values(),
+            ],
+        ], 201);
+    }
+
+    public function broadcast(BroadcastChatMessageRequest $request): JsonResponse
+    {
+        $viewer = $request->user();
+        $department = $this->resolveBroadcastDepartment(
+            $viewer,
+            $request->filled('department') ? $request->string('department')->toString() : null,
+        );
+        $body = trim($request->string('message')->toString());
+        /** @var list<int> $studentIds */
+        $studentIds = array_values(array_unique(array_map('intval', $request->input('student_ids', []))));
+
+        $students = User::query()
+            ->whereIn('id', $studentIds)
+            ->whereHas('roles', fn (Builder $roles) => $roles->where('name', Role::Student->value))
+            ->get(['id', 'name', 'email'])
+            ->keyBy('id');
+
+        abort_unless($students->count() === count($studentIds), 422, 'One or more selected users are not students.');
+
+        $attachmentMeta = $this->storeUploadedAttachment($request->file('attachment'), $viewer->id);
+
+        if ($request->filled('scheduled_at')) {
+            abort_unless($viewer->isConsultant(), 403);
+
+            $scheduled = ChatScheduledMessage::query()->create([
+                'sender_id' => $viewer->id,
+                'type' => ChatScheduledMessage::TYPE_BROADCAST,
+                'conversation_id' => null,
+                'body' => $body,
+                'attachment_path' => $attachmentMeta['path'] ?? null,
+                'attachment_original_name' => $attachmentMeta['original_name'] ?? null,
+                'attachment_mime_type' => $attachmentMeta['mime_type'] ?? null,
+                'attachment_size' => $attachmentMeta['size'] ?? null,
+                'broadcast_student_ids' => $studentIds,
+                'broadcast_department' => $department->value,
+                'scheduled_at' => Carbon::parse($request->input('scheduled_at')),
+                'status' => ChatScheduledMessage::STATUS_PENDING,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'scheduled' => true,
+                    'id' => $scheduled->id,
+                    'scheduled_at' => $scheduled->scheduled_at?->toIso8601String(),
+                    'sent_count' => 0,
+                    'skipped_blocked_count' => 0,
+                    'conversation_ids' => [],
+                    'department' => $department->value,
+                    'department_label' => $department->label(),
+                ],
+            ], 201);
+        }
+
+        $result = $this->deliverBroadcast(
+            $viewer->id,
+            $studentIds,
+            $body,
+            $department,
+            $attachmentMeta,
+        );
+
+        return response()->json([
+            'data' => [
+                'scheduled' => false,
+                ...$result,
+                'department' => $department->value,
+                'department_label' => $department->label(),
+            ],
+        ], 201);
+    }
+
     public function messages(Request $request, ChatConversation $conversation): JsonResponse
     {
         $this->ensureCanAccess($request, $conversation);
@@ -169,13 +333,14 @@ class ChatController extends Controller
         $conversation->load([
             'student:id,name,email',
             'consultant:id,name,email',
+            'staffLow:id,name,email,staff_department',
+            'staffHigh:id,name,email,staff_department',
             'messages.sender:id,name',
         ]);
         $conversation->unread_count = 0;
-        $conversation->is_blocked = $this->isStudentBlocked(
-            $conversation->student_id,
-            $conversation->department,
-        );
+        $conversation->is_blocked = $conversation->student_id
+            ? $this->isStudentBlocked($conversation->student_id, $conversation->department)
+            : false;
 
         return response()->json([
             'data' => [
@@ -216,13 +381,54 @@ class ChatController extends Controller
 
         $viewer = $request->user();
         if ($viewer->isStudent()) {
+            abort_unless($conversation->kind === ChatConversation::KIND_STUDENT_DEPARTMENT, 403);
             $this->ensureStudentNotBlocked($viewer->id, $conversation->department);
+            abort_if($request->filled('scheduled_at'), 422, 'Only staff can schedule messages.');
+        }
+
+        $body = trim($request->string('body')->toString());
+        $attachmentMeta = $this->storeUploadedAttachment($request->file('attachment'), $viewer->id);
+
+        if ($request->filled('scheduled_at')) {
+            abort_unless($viewer->isConsultant(), 403);
+
+            $scheduled = ChatScheduledMessage::query()->create([
+                'sender_id' => $viewer->id,
+                'type' => ChatScheduledMessage::TYPE_CONVERSATION,
+                'conversation_id' => $conversation->id,
+                'body' => $body,
+                'attachment_path' => $attachmentMeta['path'] ?? null,
+                'attachment_original_name' => $attachmentMeta['original_name'] ?? null,
+                'attachment_mime_type' => $attachmentMeta['mime_type'] ?? null,
+                'attachment_size' => $attachmentMeta['size'] ?? null,
+                'scheduled_at' => Carbon::parse($request->input('scheduled_at')),
+                'status' => ChatScheduledMessage::STATUS_PENDING,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'scheduled' => true,
+                    'id' => $scheduled->id,
+                    'scheduled_at' => $scheduled->scheduled_at?->toIso8601String(),
+                    'conversation' => $this->conversationPayload(
+                        $conversation->load([
+                            'student:id,name,email',
+                            'consultant:id,name,email',
+                            'staffLow:id,name,email,staff_department',
+                            'staffHigh:id,name,email,staff_department',
+                            'latestMessage.sender:id,name',
+                        ]),
+                        $viewer,
+                    ),
+                ],
+            ], 201);
         }
 
         $message = $this->storeMessage(
             $conversation,
             $viewer->id,
-            $request->string('body')->toString(),
+            $body,
+            $attachmentMeta,
         );
 
         $this->setTyping($conversation->id, $viewer->id, false);
@@ -231,16 +437,18 @@ class ChatController extends Controller
         $conversation->load([
             'student:id,name,email',
             'consultant:id,name,email',
+            'staffLow:id,name,email,staff_department',
+            'staffHigh:id,name,email,staff_department',
             'latestMessage.sender:id,name',
         ]);
         $conversation->unread_count = 0;
-        $conversation->is_blocked = $this->isStudentBlocked(
-            $conversation->student_id,
-            $conversation->department,
-        );
+        $conversation->is_blocked = $conversation->student_id
+            ? $this->isStudentBlocked($conversation->student_id, $conversation->department)
+            : false;
 
         return response()->json([
             'data' => [
+                'scheduled' => false,
                 'conversation' => $this->conversationPayload($conversation, $viewer),
                 'message' => $this->messagePayload($message, $viewer->id),
             ],
@@ -250,15 +458,16 @@ class ChatController extends Controller
     public function block(Request $request, ChatConversation $conversation): JsonResponse
     {
         $this->ensureCanAccess($request, $conversation);
+        abort_unless($conversation->kind === ChatConversation::KIND_STUDENT_DEPARTMENT, 422, 'Only student chats can be blocked.');
         $staff = $request->user();
         abort_unless($staff->isConsultant(), 403);
 
         ChatStudentBlock::query()->updateOrCreate(
             [
                 'student_id' => $conversation->student_id,
-                'department' => $conversation->department,
             ],
             [
+                'department' => null,
                 'blocked_by' => $staff->id,
                 'blocked_at' => now(),
             ],
@@ -267,14 +476,10 @@ class ChatController extends Controller
         $conversation->loadMissing('student');
 
         if ($conversation->student) {
-            $scope = $conversation->department
-                ? "chat access to {$conversation->department->label()}"
-                : 'chat access';
-
             $this->notifications->createForUser(
                 $conversation->student,
                 $staff,
-                "Your {$scope} has been blocked by staff. You can still read past messages.",
+                'Your chat access has been blocked by staff. You can still read past messages, but you cannot message any department until staff unblocks you.',
                 'chat_blocked',
                 'chat',
                 $conversation->id,
@@ -298,22 +503,19 @@ class ChatController extends Controller
     public function unblock(Request $request, ChatConversation $conversation): JsonResponse
     {
         $this->ensureCanAccess($request, $conversation);
+        abort_unless($conversation->kind === ChatConversation::KIND_STUDENT_DEPARTMENT, 422, 'Only student chats can be unblocked.');
         $staff = $request->user();
         abort_unless($staff->isConsultant(), 403);
 
-        $this->blockQuery($conversation->student_id, $conversation->department)->delete();
+        ChatStudentBlock::query()->where('student_id', $conversation->student_id)->delete();
 
         $conversation->loadMissing('student');
 
         if ($conversation->student) {
-            $scope = $conversation->department
-                ? "chat access to {$conversation->department->label()}"
-                : 'chat access';
-
             $this->notifications->createForUser(
                 $conversation->student,
                 $staff,
-                "Your {$scope} has been restored. You can send messages again.",
+                'Your chat access has been restored. You can send messages to departments again.',
                 'chat_unblocked',
                 'chat',
                 $conversation->id,
@@ -340,29 +542,148 @@ class ChatController extends Controller
      */
     private function scopeVisibleToOrganization(Builder $query, User $user): Builder
     {
-        // Super Admin and Admin see every student ↔ department thread.
-        if ($user->isSuperAdmin() || $user->isAdmin()) {
-            return $query;
-        }
+        return $query->where(function (Builder $outer) use ($user) {
+            $outer->where(function (Builder $studentThreads) use ($user) {
+                $studentThreads->where('kind', ChatConversation::KIND_STUDENT_DEPARTMENT);
 
-        $departments = collect($user->accessibleDepartments())->map->value->all();
+                if ($user->isSuperAdmin() || $user->isAdmin()) {
+                    return;
+                }
 
-        return $query->where(function (Builder $inner) use ($user, $departments) {
-            if ($departments !== []) {
-                $inner->whereIn('department', $departments);
-            }
+                $departments = collect($user->accessibleDepartments())->map->value->all();
 
-            $inner->orWhere(function (Builder $legacy) use ($user) {
-                $legacy->whereNull('department')->where('consultant_id', $user->id);
+                $studentThreads->where(function (Builder $inner) use ($user, $departments) {
+                    if ($departments !== []) {
+                        $inner->whereIn('department', $departments);
+                    }
+
+                    $inner->orWhere(function (Builder $legacy) use ($user) {
+                        $legacy->whereNull('department')->where('consultant_id', $user->id);
+                    });
+                });
+            })->orWhere(function (Builder $staffDms) use ($user) {
+                $staffDms->where('kind', ChatConversation::KIND_STAFF_DM)
+                    ->where(function (Builder $pair) use ($user) {
+                        $pair->where('staff_low_id', $user->id)
+                            ->orWhere('staff_high_id', $user->id);
+                    });
             });
         });
     }
 
-    private function storeMessage(ChatConversation $conversation, int $senderId, string $body): ChatMessage
+    /**
+     * @param  list<int>  $studentIds
+     * @param  array{path: string, original_name: string, mime_type: string|null, size: int|null}|null  $attachmentMeta
+     * @return array{sent_count: int, skipped_blocked_count: int, conversation_ids: list<int>}
+     */
+    public function deliverBroadcast(
+        int $senderId,
+        array $studentIds,
+        string $body,
+        StaffDepartment $department,
+        ?array $attachmentMeta,
+        bool $deleteSourceAttachment = true,
+    ): array {
+        $blockedIds = ChatStudentBlock::query()
+            ->whereIn('student_id', $studentIds)
+            ->pluck('student_id')
+            ->flip();
+
+        $conversationIds = [];
+        $sentCount = 0;
+        $skippedBlockedCount = 0;
+
+        foreach ($studentIds as $studentId) {
+            if ($blockedIds->has($studentId)) {
+                $skippedBlockedCount++;
+                continue;
+            }
+
+            $conversation = ChatConversation::query()->firstOrCreate(
+                [
+                    'student_id' => $studentId,
+                    'department' => $department,
+                    'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
+                ],
+            );
+
+            $messageAttachment = $attachmentMeta
+                ? $this->duplicateAttachmentForMessage($attachmentMeta, $senderId)
+                : null;
+
+            $this->storeMessage($conversation, $senderId, $body, $messageAttachment);
+            $conversationIds[] = $conversation->id;
+            $sentCount++;
+        }
+
+        if ($deleteSourceAttachment && $attachmentMeta !== null) {
+            UploadStorage::disk()->delete($attachmentMeta['path']);
+        }
+
+        return [
+            'sent_count' => $sentCount,
+            'skipped_blocked_count' => $skippedBlockedCount,
+            'conversation_ids' => $conversationIds,
+        ];
+    }
+
+    public function dispatchScheduledMessage(ChatScheduledMessage $scheduled): void
     {
+        if ($scheduled->status !== ChatScheduledMessage::STATUS_PENDING) {
+            return;
+        }
+
+        if ($scheduled->type === ChatScheduledMessage::TYPE_CONVERSATION) {
+            $conversation = $scheduled->conversation;
+            abort_unless($conversation instanceof ChatConversation, 404, 'Conversation missing for scheduled message.');
+
+            $attachment = $scheduled->attachmentMeta();
+            $this->storeMessage(
+                $conversation,
+                $scheduled->sender_id,
+                trim((string) $scheduled->body),
+                $attachment,
+            );
+        } elseif ($scheduled->type === ChatScheduledMessage::TYPE_BROADCAST) {
+            $department = $scheduled->broadcast_department;
+            abort_unless($department instanceof StaffDepartment, 422, 'Broadcast department missing.');
+
+            /** @var list<int> $studentIds */
+            $studentIds = array_values(array_map('intval', $scheduled->broadcast_student_ids ?? []));
+            abort_unless($studentIds !== [], 422, 'Broadcast recipients missing.');
+
+            $this->deliverBroadcast(
+                $scheduled->sender_id,
+                $studentIds,
+                trim((string) $scheduled->body),
+                $department,
+                $scheduled->attachmentMeta(),
+                deleteSourceAttachment: false,
+            );
+        } else {
+            throw new \RuntimeException('Unknown scheduled message type.');
+        }
+
+        $scheduled->update([
+            'status' => ChatScheduledMessage::STATUS_SENT,
+            'sent_at' => now(),
+            'error_message' => null,
+        ]);
+    }
+
+    private function storeMessage(
+        ChatConversation $conversation,
+        int $senderId,
+        string $body,
+        ?array $attachment = null,
+    ): ChatMessage {
         $message = $conversation->messages()->create([
             'sender_id' => $senderId,
             'body' => $body,
+            'attachment_path' => $attachment['path'] ?? null,
+            'attachment_original_name' => $attachment['original_name'] ?? null,
+            'attachment_mime_type' => $attachment['mime_type'] ?? null,
+            'attachment_size' => $attachment['size'] ?? null,
         ]);
 
         $conversation->update([
@@ -372,7 +693,8 @@ class ChatController extends Controller
         $message->load('sender:id,name');
         $conversation->loadMissing('student:id,name,email');
 
-        $preview = Str::limit(trim($body), 90);
+        $preview = $this->messagePreviewText($message);
+        $preview = Str::limit($preview, 90);
         $sender = $message->sender;
 
         if (! $sender) {
@@ -394,11 +716,112 @@ class ChatController extends Controller
     }
 
     /**
+     * @return array{path: string, original_name: string, mime_type: string|null, size: int|null}|null
+     */
+    private function storeUploadedAttachment(?\Illuminate\Http\UploadedFile $file, int $senderId): ?array
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $path = $file->store("chat-attachments/{$senderId}", UploadStorage::diskName());
+
+        return [
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType() ?: $file->getMimeType(),
+            'size' => $file->getSize() ?: null,
+        ];
+    }
+
+    /**
+     * @param  array{path: string, original_name: string, mime_type: string|null, size: int|null}  $attachment
+     * @return array{path: string, original_name: string, mime_type: string|null, size: int|null}
+     */
+    private function duplicateAttachmentForMessage(array $attachment, int $senderId): array
+    {
+        $extension = pathinfo($attachment['path'], PATHINFO_EXTENSION);
+        $newPath = 'chat-attachments/'.$senderId.'/'.Str::uuid().($extension !== '' ? '.'.$extension : '');
+        UploadStorage::disk()->copy($attachment['path'], $newPath);
+
+        return [
+            ...$attachment,
+            'path' => $newPath,
+        ];
+    }
+
+    private function messagePreviewText(ChatMessage $message): string
+    {
+        $body = trim((string) $message->body);
+        if ($body !== '') {
+            return $body;
+        }
+
+        if ($message->hasAttachment()) {
+            return 'Attachment: '.($message->attachment_original_name ?: 'file');
+        }
+
+        return 'New message';
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function lastMessageSummary(?ChatMessage $message, int $viewerId): ?array
+    {
+        if (! $message) {
+            return null;
+        }
+
+        return [
+            'id' => $message->id,
+            'body' => $this->messagePreviewText($message),
+            'has_attachment' => $message->hasAttachment(),
+            'created_at' => $message->created_at?->toIso8601String(),
+            'mine' => $message->sender_id === $viewerId,
+        ];
+    }
+
+    public function downloadAttachment(Request $request, ChatMessage $message): StreamedResponse
+    {
+        $message->loadMissing('conversation');
+        abort_unless($message->conversation instanceof ChatConversation, 404);
+        abort_unless($message->hasAttachment(), 404);
+
+        $this->ensureCanAccess($request, $message->conversation);
+
+        $disk = UploadStorage::disk();
+        abort_unless($disk->exists($message->attachment_path), 404);
+
+        return $disk->download(
+            $message->attachment_path,
+            $message->attachment_original_name ?: 'attachment',
+            [
+                'Content-Type' => $message->attachment_mime_type ?: 'application/octet-stream',
+            ],
+        );
+    }
+
+    /**
      * @return list<User>
      */
     private function recipientsFor(ChatConversation $conversation, int $senderId): array
     {
         $sender = User::query()->find($senderId);
+
+        if ($conversation->isStaffDm()) {
+            $peerId = $conversation->staff_low_id === $senderId
+                ? $conversation->staff_high_id
+                : $conversation->staff_low_id;
+
+            if (! $peerId || $peerId === $senderId) {
+                return [];
+            }
+
+            $peer = User::query()->find($peerId);
+
+            return $peer ? [$peer] : [];
+        }
 
         if ($sender?->isStudent()) {
             if ($conversation->department) {
@@ -442,6 +865,13 @@ class ChatController extends Controller
     private function ensureCanAccess(Request $request, ChatConversation $conversation): void
     {
         $user = $request->user();
+
+        if ($conversation->isStaffDm()) {
+            abort_unless($user->isConsultant(), 403);
+            abort_unless($conversation->includesStaff($user->id), 403);
+
+            return;
+        }
 
         if ($user->isStudent()) {
             abort_unless($conversation->student_id === $user->id, 403);
@@ -510,6 +940,29 @@ class ChatController extends Controller
      */
     private function conversationPayload(ChatConversation $conversation, User $viewer): array
     {
+        if ($conversation->isStaffDm()) {
+            $other = $conversation->staffPeerFor($viewer);
+
+            return [
+                'id' => $conversation->id,
+                'kind' => ChatConversation::KIND_STAFF_DM,
+                'department' => null,
+                'department_label' => null,
+                'other_user' => [
+                    'id' => $other?->id,
+                    'name' => $other?->name,
+                    'email' => $other?->email,
+                    'staff_department' => $other?->staff_department?->value,
+                    'staff_department_label' => $other?->staff_department?->label(),
+                ],
+                'last_message' => $this->lastMessageSummary($conversation->latestMessage, $viewer->id),
+                'last_message_at' => $conversation->last_message_at?->toIso8601String(),
+                'other_user_typing' => $this->isPeerTyping($conversation->id, $viewer->id),
+                'unread_count' => (int) ($conversation->unread_count ?? 0),
+                'is_blocked' => false,
+            ];
+        }
+
         $isStudentViewer = $viewer->id === $conversation->student_id;
         $other = $isStudentViewer
             ? $conversation->consultant
@@ -521,6 +974,7 @@ class ChatController extends Controller
 
         return [
             'id' => $conversation->id,
+            'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
             'department' => $conversation->department?->value,
             'department_label' => $conversation->department?->label(),
             'other_user' => [
@@ -528,58 +982,132 @@ class ChatController extends Controller
                 'name' => $displayName,
                 'email' => $other?->email,
             ],
-            'last_message' => $conversation->latestMessage
-                ? [
-                    'id' => $conversation->latestMessage->id,
-                    'body' => $conversation->latestMessage->body,
-                    'created_at' => $conversation->latestMessage->created_at?->toIso8601String(),
-                    'mine' => $conversation->latestMessage->sender_id === $viewer->id,
-                ]
-                : null,
+            'last_message' => $this->lastMessageSummary($conversation->latestMessage, $viewer->id),
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'other_user_typing' => $this->isPeerTyping($conversation->id, $viewer->id),
             'unread_count' => (int) ($conversation->unread_count ?? 0),
             'is_blocked' => (bool) (
                 $conversation->is_blocked
-                ?? $this->isStudentBlocked($conversation->student_id, $conversation->department)
+                ?? ($conversation->student_id
+                    ? $this->isStudentBlocked($conversation->student_id)
+                    : false)
             ),
         ];
     }
 
-    /** Blocks are per department, so a block from one department leaves the others open. */
-    private function isStudentBlocked(int $studentId, ?StaffDepartment $department): bool
+    public function blocks(Request $request): JsonResponse
     {
-        return $this->blockQuery($studentId, $department)->exists();
+        $staff = $request->user();
+        abort_unless($staff->isConsultant(), 403);
+
+        $blocks = ChatStudentBlock::query()
+            ->with([
+                'student:id,name,email',
+                'blockedBy:id,name,email',
+            ])
+            ->orderByDesc('blocked_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json([
+            'data' => $blocks->map(fn (ChatStudentBlock $block) => [
+                'student_id' => $block->student_id,
+                'student' => [
+                    'id' => $block->student?->id,
+                    'name' => $block->student?->name,
+                    'email' => $block->student?->email,
+                ],
+                'blocked_by' => $block->blockedBy
+                    ? [
+                        'id' => $block->blockedBy->id,
+                        'name' => $block->blockedBy->name,
+                        'email' => $block->blockedBy->email,
+                    ]
+                    : null,
+                'blocked_at' => $block->blocked_at?->toIso8601String(),
+            ]),
+        ]);
     }
 
-    private function ensureStudentNotBlocked(int $studentId, ?StaffDepartment $department): void
+    public function unblockStudent(Request $request, User $student): JsonResponse
+    {
+        $staff = $request->user();
+        abort_unless($staff->isConsultant(), 403);
+        abort_unless($student->isStudent(), 404);
+
+        $existed = ChatStudentBlock::query()->where('student_id', $student->id)->exists();
+        ChatStudentBlock::query()->where('student_id', $student->id)->delete();
+
+        if ($existed) {
+            $conversation = ChatConversation::query()
+                ->where('student_id', $student->id)
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->first();
+
+            $this->notifications->createForUser(
+                $student,
+                $staff,
+                'Your chat access has been restored. You can send messages to departments again.',
+                'chat_unblocked',
+                'chat',
+                $conversation?->id,
+            );
+        }
+
+        return response()->json([
+            'data' => [
+                'student_id' => $student->id,
+                'unblocked' => true,
+            ],
+        ]);
+    }
+
+    /** A block from any staff applies to every department for that student. */
+    private function isStudentBlocked(int $studentId, ?StaffDepartment $department = null): bool
+    {
+        return ChatStudentBlock::query()->where('student_id', $studentId)->exists();
+    }
+
+    private function resolveBroadcastDepartment(User $viewer, ?string $departmentValue): StaffDepartment
+    {
+        $accessible = $viewer->accessibleDepartments();
+        $needsExplicitDepartment = $viewer->isSuperAdmin()
+            || $viewer->isAdmin()
+            || count($accessible) > 1;
+
+        if ($needsExplicitDepartment) {
+            abort_unless(
+                filled($departmentValue),
+                422,
+                'Department is required for broadcast.',
+            );
+
+            $department = StaffDepartment::tryFrom((string) $departmentValue);
+            abort_unless($department instanceof StaffDepartment, 422, 'Invalid department.');
+            abort_unless($viewer->canWorkInDepartment($department), 403);
+
+            return $department;
+        }
+
+        if ($viewer->staff_department instanceof StaffDepartment) {
+            return $viewer->staff_department;
+        }
+
+        if (count($accessible) === 1) {
+            return $accessible[0];
+        }
+
+        abort(422, 'No department assigned for broadcast.');
+    }
+
+    private function ensureStudentNotBlocked(int $studentId, ?StaffDepartment $department = null): void
     {
         abort_if(
-            $this->isStudentBlocked($studentId, $department),
+            $this->isStudentBlocked($studentId),
             403,
-            $department
-                ? "Your chat access to {$department->label()} has been blocked by staff."
-                : 'Your chat access has been blocked by staff.',
+            'Your chat access has been blocked by staff.',
         );
-    }
-
-    /**
-     * @return Builder<ChatStudentBlock>
-     */
-    private function blockQuery(int $studentId, ?StaffDepartment $department): Builder
-    {
-        return ChatStudentBlock::query()
-            ->where('student_id', $studentId)
-            ->when(
-                $department,
-                fn (Builder $query) => $query->where('department', $department->value),
-                fn (Builder $query) => $query->whereNull('department'),
-            );
-    }
-
-    private function blockKey(int $studentId, ?StaffDepartment $department): string
-    {
-        return $studentId.'|'.($department?->value ?? '');
     }
 
     private function setTyping(int $conversationId, int $userId, bool $typing): void
@@ -635,6 +1163,14 @@ class ChatController extends Controller
                 'name' => $message->sender->name,
             ],
             'created_at' => $message->created_at?->toIso8601String(),
+            'attachment' => $message->hasAttachment()
+                ? [
+                    'name' => $message->attachment_original_name,
+                    'mime_type' => $message->attachment_mime_type,
+                    'size' => $message->attachment_size,
+                    'download_path' => "/chat/messages/{$message->id}/attachment",
+                ]
+                : null,
         ];
     }
 }

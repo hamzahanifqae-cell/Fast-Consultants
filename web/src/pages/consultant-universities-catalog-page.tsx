@@ -12,7 +12,7 @@ import './dashboard.css';
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: 'passport', label: 'Passport' },
-  { value: 'metric', label: 'Metric (Matric)' },
+  { value: 'metric', label: 'Matric' },
   { value: 'intermediate', label: 'Intermediate' },
   { value: 'transcript', label: 'Transcript' },
   { value: 'degree_certificate', label: 'Degree certificate' },
@@ -179,7 +179,7 @@ export function ConsultantUniversitiesCatalogPage() {
             </div>
           ))}
           {!catalogQuery.isLoading && catalog.length === 0 ? (
-            <p className="muted">Catalog is empty. Add a university to get started.</p>
+            <p className="muted">Catalog is empty.</p>
           ) : null}
         </div>
       </section>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { InlinePageLoader } from '@/components/app-loader';
 import { PageEmpty, SectionProgress } from '@/components/page-fill';
@@ -7,14 +8,26 @@ import { RejectionFeedback } from '@/components/rejection-feedback';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
+import { StudentRoutes } from '@/lib/department-routes';
+import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
 import { prepareUploadFile } from '@/lib/prepare-upload-file';
-import type { DocumentType, StudentDocument } from '@/types/auth';
+import { studentDocumentHeading } from '@/lib/student-document-heading';
+import {
+  universityDocumentCoverage,
+  universityDocumentStatusLabel,
+} from '@/lib/university-document-requirements';
+import type {
+  ApplicationStatusResponse,
+  DocumentType,
+  StudentDocument,
+  University,
+} from '@/types/auth';
 import './dashboard.css';
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string; required?: boolean }[] = [
   { value: 'passport', label: 'Passport', required: true },
   { value: 'cnic', label: 'CNIC', required: true },
-  { value: 'metric', label: 'Metric (Matric)', required: true },
+  { value: 'metric', label: 'Matric', required: true },
   { value: 'intermediate', label: 'Intermediate', required: true },
   { value: 'transcript', label: 'Transcript', required: true },
   { value: 'degree_certificate', label: 'Degree certificate' },
@@ -39,6 +52,7 @@ export function StudentDocumentsPage() {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<number | null>(null);
 
   const documentsQuery = useQuery({
     queryKey: ['student-documents'],
@@ -48,7 +62,39 @@ export function StudentDocumentsPage() {
     },
   });
 
+  const universitiesQuery = useQuery({
+    queryKey: ['student-universities'],
+    queryFn: async () => {
+      const { data } = await api.get<{ data: University[] }>('/student/universities');
+      return data.data;
+    },
+  });
+
+  const statusQuery = useQuery({
+    queryKey: ['student-application-status'],
+    queryFn: async () => {
+      const { data } = await api.get<{ data: ApplicationStatusResponse }>(
+        '/student/application-status',
+      );
+      return data.data;
+    },
+  });
+
   const docs = documentsQuery.data ?? [];
+  const universities = universitiesQuery.data ?? [];
+  const urgentDocuments = statusQuery.data?.checklist.urgent_documents;
+  const universityCoverage = useMemo(
+    () => universityDocumentCoverage(universities, docs),
+    [universities, docs],
+  );
+  const universityRequiredTypes = useMemo(
+    () => new Set(universityCoverage.items.map((item) => item.type)),
+    [universityCoverage],
+  );
+  const urgentRequiredTypes = useMemo(
+    () => new Set((urgentDocuments?.missing ?? []).map((item) => item.type)),
+    [urgentDocuments],
+  );
   const editingDoc = docs.find((doc) => doc.id === editingId) ?? null;
   const counts = useMemo(() => {
     return {
@@ -75,11 +121,22 @@ export function StudentDocumentsPage() {
           item.value === editingDoc?.type ||
           REPEATABLE_TYPES.includes(item.value) ||
           !uploadedByType.has(item.value),
-      ).map((item) => ({
-        value: item.value,
-        label: item.required ? `${item.label} *` : item.label,
-      })),
-    [uploadedByType, editingDoc],
+      ).map((item) => {
+        const required =
+          item.required ||
+          universityRequiredTypes.has(item.value) ||
+          urgentRequiredTypes.has(item.value);
+        const urgent = urgentRequiredTypes.has(item.value);
+        return {
+          value: item.value,
+          label: urgent
+            ? `${item.label} (urgent)`
+            : required
+              ? `${item.label} *`
+              : item.label,
+        };
+      }),
+    [uploadedByType, editingDoc, universityRequiredTypes, urgentRequiredTypes],
   );
 
   const uploadedTypeLabels = useMemo(
@@ -97,18 +154,51 @@ export function StudentDocumentsPage() {
   }, [typeOptions, type, editingId]);
 
   const documentsProgress = useMemo(() => {
-    if (counts.total === 0) {
+    if (urgentDocuments && urgentDocuments.required > 0 && !urgentDocuments.complete) {
+      return {
+        percent: Math.round(
+          ((urgentDocuments.covered + urgentDocuments.pending * 0.5) /
+            Math.max(urgentDocuments.required, 1)) *
+            100,
+        ),
+        title: 'Urgent documents',
+        description:
+          urgentDocuments.action_needed > 0
+            ? `${urgentDocuments.action_needed} urgent file${urgentDocuments.action_needed === 1 ? '' : 's'} still needed.`
+            : `${urgentDocuments.pending} urgent file${urgentDocuments.pending === 1 ? '' : 's'} waiting for staff review.`,
+      };
+    }
+    if (counts.total === 0 && universityCoverage.requiredCount === 0) {
       return {
         percent: 0,
         title: 'Documents incomplete',
-        description: 'Upload your admission files to get started.',
+        description: 'No files yet.',
       };
     }
     if (counts.rejected > 0) {
       return {
-        percent: Math.round((counts.approved / counts.total) * 100),
+        percent: Math.round((counts.approved / Math.max(counts.total, 1)) * 100),
         title: 'Documents need attention',
         description: `${counts.rejected} file${counts.rejected === 1 ? '' : 's'} rejected, fix and re-upload.`,
+      };
+    }
+    if (universityCoverage.requiredCount > 0 && !universityCoverage.complete) {
+      const uploadPercent =
+        counts.total === 0
+          ? 0
+          : counts.pending > 0
+            ? Math.round(((counts.approved + counts.pending * 0.5) / counts.total) * 100)
+            : Math.round((counts.approved / counts.total) * 100);
+      const uniPercent = Math.round(
+        (universityCoverage.coveredCount / universityCoverage.requiredCount) * 100,
+      );
+      return {
+        percent: Math.round((uploadPercent + uniPercent) / 2),
+        title: 'University documents needed',
+        description:
+          universityCoverage.actionCount > 0
+            ? `${universityCoverage.actionCount} required file${universityCoverage.actionCount === 1 ? '' : 's'} still missing for your universities.`
+            : `${universityCoverage.pendingCount} university document${universityCoverage.pendingCount === 1 ? '' : 's'} waiting for staff review.`,
       };
     }
     if (counts.pending > 0) {
@@ -123,7 +213,7 @@ export function StudentDocumentsPage() {
       title: 'Documents complete',
       description: `All ${counts.approved} uploaded file${counts.approved === 1 ? '' : 's'} are approved.`,
     };
-  }, [counts]);
+  }, [counts, universityCoverage, urgentDocuments]);
 
   function resetForm() {
     setEditingId(null);
@@ -145,6 +235,21 @@ export function StudentDocumentsPage() {
       fileInputRef.current.value = '';
     }
     window.scrollTo(0, 0);
+  }
+
+  async function viewDocument(document: StudentDocument) {
+    setOpeningId(document.id);
+    setError(null);
+    try {
+      await openAuthenticatedFile(
+        `/student/documents/${document.id}/download`,
+        document.original_name || document.title,
+      );
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not open this document.'));
+    } finally {
+      setOpeningId(null);
+    }
   }
 
   const save = useMutation({
@@ -229,10 +334,96 @@ export function StudentDocumentsPage() {
       title="Documents">
       <div className="page-stack">
         <SectionProgress
-          loading={documentsQuery.isLoading}
+          loading={documentsQuery.isLoading || statusQuery.isLoading}
           title={documentsProgress.title}
           percent={documentsProgress.percent}
         />
+
+        {urgentDocuments && urgentDocuments.required > 0 ? (
+          <section className="panel university-docs-banner urgent-docs-banner needs-action">
+            <div className="university-docs-banner-head">
+              <div>
+                <h2>Urgent documents</h2>
+                <p className="muted" style={{ margin: '6px 0 0' }}>
+                  Staff asked for these files now. Your application stays on Documents until they
+                  are approved.
+                </p>
+              </div>
+              <span className="status-pill warn">
+                {urgentDocuments.action_needed > 0
+                  ? `${urgentDocuments.action_needed} needed`
+                  : `${urgentDocuments.pending} in review`}
+              </span>
+            </div>
+            <div className="university-doc-chip-row">
+              {urgentDocuments.missing.map((item) => {
+                const existing = uploadedByType.get(item.type);
+                return (
+                  <button
+                    key={`urgent-${item.id}`}
+                    type="button"
+                    className={`university-doc-chip status-${item.status}`}
+                    onClick={() => {
+                      if (existing && canModifyDocument(existing)) {
+                        startEdit(existing);
+                        return;
+                      }
+                      if (existing && !REPEATABLE_TYPES.includes(item.type)) {
+                        return;
+                      }
+                      setEditingId(null);
+                      setType(item.type);
+                      setError(null);
+                      window.scrollTo(0, 0);
+                    }}>
+                    <strong>{item.label}</strong>
+                    <span>{universityDocumentStatusLabel(item.status)}</span>
+                    {item.note ? <span className="muted">{item.note}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {universityCoverage.requiredCount > 0 ? (
+          <section
+            className={`panel university-docs-banner${universityCoverage.complete ? '' : ' needs-action'}`}>
+            <div className="university-docs-banner-head">
+              <div>
+                <h2>Required for your universities</h2>
+                <p className="muted" style={{ margin: '6px 0 0' }}>
+                  {universityCoverage.complete
+                    ? 'All university-required documents are approved.'
+                    : `${universityCoverage.coveredCount} of ${universityCoverage.requiredCount} approved.`}
+                </p>
+              </div>
+              <Link className="text-link-btn" to={StudentRoutes.universities}>
+                View universities
+              </Link>
+            </div>
+            <div className="university-doc-chip-row">
+              {universityCoverage.items.map((item) => (
+                <button
+                  key={item.type}
+                  type="button"
+                  className={`university-doc-chip status-${item.status}`}
+                  disabled={uploadedByType.has(item.type) && !REPEATABLE_TYPES.includes(item.type)}
+                  onClick={() => {
+                    if (uploadedByType.has(item.type) && !REPEATABLE_TYPES.includes(item.type)) {
+                      return;
+                    }
+                    setType(item.type);
+                    setError(null);
+                    window.scrollTo(0, 0);
+                  }}>
+                  <strong>{item.label}</strong>
+                  <span>{universityDocumentStatusLabel(item.status)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="panel">
               <h2>{editingId ? 'Edit document' : 'Upload a document'}</h2>
@@ -322,7 +513,7 @@ export function StudentDocumentsPage() {
               <div key={document.id} className="stack-item">
                 <div>
                   <strong>
-                    {document.title}, {document.type_label}
+                    {studentDocumentHeading(document)}
                   </strong>
                   <span>{document.original_name}</span>
                   {document.status === 'rejected' && document.rejection_reason ? (
@@ -334,6 +525,13 @@ export function StudentDocumentsPage() {
                     className={`status-pill${document.status === 'rejected' ? ' danger' : document.status === 'pending' ? ' warn' : ''}`}>
                     {document.status_label}
                   </span>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={openingId === document.id}
+                    onClick={() => void viewDocument(document)}>
+                    {openingId === document.id ? 'Opening…' : 'View'}
+                  </button>
                   {canModifyDocument(document) ? (
                     <>
                       <button

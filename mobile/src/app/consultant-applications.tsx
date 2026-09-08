@@ -326,7 +326,7 @@ export default function ConsultantApplicationsScreen() {
             </ThemedView>
           ) : (
             <ThemedText type="small" themeColor="textSecondary">
-              Select a student to manage preparation and interview.
+              No student selected.
             </ThemedText>
           )}
         </StudentScreen>

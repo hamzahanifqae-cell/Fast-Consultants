@@ -47,13 +47,13 @@ export default function StudentVisaAppointmentsScreen() {
   return (
     <StudentScreen
       showBack
-      title="Visa appointments">
+      title="File Making appointments">
       {appointmentsQuery.isLoading ? <ActivityIndicator color={Brand.primary} /> : null}
 
       {!appointmentsQuery.isLoading && appointments.length === 0 ? (
         <StudentSurface>
           <ThemedText type="small" themeColor="textSecondary">
-            No visa appointments yet. Your Visa department will schedule one when you are ready.
+            No File Making appointments yet. Your File Making department will schedule one when you are ready.
           </ThemedText>
         </StudentSurface>
       ) : null}

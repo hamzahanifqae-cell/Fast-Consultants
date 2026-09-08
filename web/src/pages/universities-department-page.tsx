@@ -43,6 +43,13 @@ export function UniversitiesDepartmentPage() {
                 {catalogQuery.isLoading ? '…' : count || 'Empty'}
               </span>
             </Link>
+            <Link className="workspace-link" to={routes.universities.suggestions}>
+              <div>
+                <strong>Student suggestions</strong>
+                <span>Review universities students suggested by country</span>
+              </div>
+              <span className="workspace-link-meta">Review</span>
+            </Link>
             <Link className="workspace-link" to={routes.universities.share}>
               <div>
                 <strong>Share with students</strong>

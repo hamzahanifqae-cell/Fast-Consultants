@@ -31,27 +31,27 @@ export function StudentVisaAppointmentsPage() {
     if (appointments.length === 0) {
       return {
         percent: 0,
-        title: 'Visa incomplete',
-        description: 'No appointments yet, Visa staff will add them here.',
+        title: 'File Making incomplete',
+        description: 'No appointments yet, File Making staff will add them here.',
       };
     }
     if (completed > 0 && upcoming === 0) {
       return {
         percent: 100,
-        title: 'Visa complete',
+        title: 'File Making complete',
         description: `${completed} appointment${completed === 1 ? '' : 's'} completed.`,
       };
     }
     if (upcoming > 0) {
       return {
         percent: Math.round(((completed + upcoming * 0.5) / appointments.length) * 100),
-        title: 'Visa in progress',
+        title: 'File Making in progress',
         description: `${upcoming} scheduled, ${completed} completed.`,
       };
     }
     return {
       percent: Math.round((completed / appointments.length) * 100),
-      title: 'Visa in progress',
+      title: 'File Making in progress',
       description: `${appointments.length} appointment${appointments.length === 1 ? '' : 's'} on file.`,
     };
   })();
@@ -59,7 +59,7 @@ export function StudentVisaAppointmentsPage() {
   return (
     <AppShell
       badge="Student"
-      title="Visa appointments">
+      title="File Making appointments">
       <div className="page-stack">
         <SectionProgress
           loading={appointmentsQuery.isLoading}
@@ -95,7 +95,7 @@ export function StudentVisaAppointmentsPage() {
               </div>
               {!appointmentsQuery.isLoading && appointments.length === 0 ? (
                 <PageEmpty
-                  title="No visa appointments yet"
+                  title="No File Making appointments yet"
                 />
               ) : null}
               <p className="muted" style={{ marginTop: 16 }}>
