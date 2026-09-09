@@ -7,6 +7,7 @@ use App\Enums\StaffDepartment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\BroadcastChatMessageRequest;
 use App\Http\Requests\Api\SendChatMessageRequest;
+use App\Http\Requests\Api\SendWhatsAppChatMessageRequest;
 use App\Http\Requests\Api\SetChatTypingRequest;
 use App\Http\Requests\Api\StartChatRequest;
 use App\Http\Requests\Api\StartStaffChatRequest;
@@ -17,7 +18,9 @@ use App\Models\ChatScheduledMessage;
 use App\Models\ChatStudentBlock;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\ScheduledChatDispatcher;
 use App\Services\StudentNotificationService;
+use App\Services\WhatsAppCloudService;
 use App\Support\UploadStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -25,12 +28,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
     public function __construct(
         private readonly StudentNotificationService $notifications,
+        private readonly WhatsAppCloudService $whatsapp,
+        private readonly ScheduledChatDispatcher $scheduledChat,
     ) {
     }
 
@@ -48,11 +54,14 @@ class ChatController extends Controller
 
     public function conversations(Request $request): JsonResponse
     {
+        $this->scheduledChat->sendDueIfNeeded();
+
         $user = $request->user();
 
         $conversations = ChatConversation::query()
             ->with([
                 'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
                 'consultant:id,name,email',
                 'staffLow:id,name,email,staff_department',
                 'staffHigh:id,name,email,staff_department',
@@ -155,6 +164,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'latestMessage.sender:id,name',
             'messages.sender:id,name',
@@ -188,13 +198,14 @@ class ChatController extends Controller
                 ]);
             })
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'staff_department']);
+            ->get(['id', 'name', 'email', 'phone', 'staff_department']);
 
         return response()->json([
             'data' => $staff->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,
                 'staff_department' => $user->staff_department?->value,
                 'staff_department_label' => $user->staff_department?->label(),
             ])->values(),
@@ -233,6 +244,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'staffLow:id,name,email,staff_department',
             'staffHigh:id,name,email,staff_department',
@@ -323,8 +335,106 @@ class ChatController extends Controller
         ], 201);
     }
 
+    public function broadcastWhatsApp(BroadcastChatMessageRequest $request): JsonResponse
+    {
+        $viewer = $request->user();
+        abort_unless($viewer->isConsultant(), 403);
+        abort_if($request->filled('scheduled_at'), 422, 'Scheduled WhatsApp broadcast is not supported. Send now instead.');
+
+        $department = $this->resolveBroadcastDepartment(
+            $viewer,
+            $request->filled('department') ? $request->string('department')->toString() : null,
+        );
+        $body = trim($request->string('message')->toString());
+        /** @var list<int> $studentIds */
+        $studentIds = array_values(array_unique(array_map('intval', $request->input('student_ids', []))));
+
+        $students = User::query()
+            ->whereIn('id', $studentIds)
+            ->whereHas('roles', fn (Builder $roles) => $roles->where('name', Role::Student->value))
+            ->with('studentProfile:id,user_id,phone')
+            ->get(['id', 'name', 'email'])
+            ->keyBy('id');
+
+        abort_unless($students->count() === count($studentIds), 422, 'One or more selected users are not students.');
+
+        $attachmentMeta = $this->storeUploadedAttachment($request->file('attachment'), $viewer->id);
+        abort_if($body === '' && $attachmentMeta === null, 422, 'Enter a message or attach a file.');
+
+        $mediaContents = null;
+        $mediaMime = null;
+        $mediaFilename = null;
+        if ($attachmentMeta !== null) {
+            $mediaContents = UploadStorage::disk()->get($attachmentMeta['path']);
+            if ($mediaContents === null || $mediaContents === '') {
+                return response()->json([
+                    'message' => 'Could not read the attachment for WhatsApp.',
+                ], 422);
+            }
+            $mediaMime = $attachmentMeta['mime_type'] ?: null;
+            $mediaFilename = $attachmentMeta['original_name'] ?: 'attachment';
+        }
+
+        $whatsappSent = 0;
+        $whatsappFailed = 0;
+        $failures = [];
+
+        foreach ($studentIds as $studentId) {
+            $student = $students->get($studentId);
+            $phone = $student?->studentProfile?->phone;
+            try {
+                $this->whatsapp->sendMessage(
+                    (string) $phone,
+                    $body,
+                    $mediaContents,
+                    $mediaMime,
+                    $mediaFilename,
+                );
+                $whatsappSent++;
+            } catch (RuntimeException $exception) {
+                $whatsappFailed++;
+                $failures[] = [
+                    'student_id' => $studentId,
+                    'student_name' => $student?->name,
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        abort_if(
+            $whatsappSent === 0,
+            422,
+            $failures[0]['message'] ?? 'Could not send WhatsApp to any selected students.',
+        );
+
+        // Also deliver in-app for students who received WhatsApp (and still deliver to all for chat parity).
+        $result = $this->deliverBroadcast(
+            $viewer->id,
+            $studentIds,
+            $body,
+            $department,
+            $attachmentMeta,
+        );
+
+        return response()->json([
+            'data' => [
+                'scheduled' => false,
+                ...$result,
+                'department' => $department->value,
+                'department_label' => $department->label(),
+                'whatsapp' => [
+                    'sent_count' => $whatsappSent,
+                    'failed_count' => $whatsappFailed,
+                    'failures' => $failures,
+                ],
+            ],
+        ], 201);
+    }
+
     public function messages(Request $request, ChatConversation $conversation): JsonResponse
     {
+        $this->scheduledChat->sendDueIfNeeded();
+
         $this->ensureCanAccess($request, $conversation);
 
         $viewer = $request->user();
@@ -332,6 +442,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'staffLow:id,name,email,staff_department',
             'staffHigh:id,name,email,staff_department',
@@ -413,6 +524,7 @@ class ChatController extends Controller
                     'conversation' => $this->conversationPayload(
                         $conversation->load([
                             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
                             'consultant:id,name,email',
                             'staffLow:id,name,email,staff_department',
                             'staffHigh:id,name,email,staff_department',
@@ -436,6 +548,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'staffLow:id,name,email,staff_department',
             'staffHigh:id,name,email,staff_department',
@@ -451,6 +564,99 @@ class ChatController extends Controller
                 'scheduled' => false,
                 'conversation' => $this->conversationPayload($conversation, $viewer),
                 'message' => $this->messagePayload($message, $viewer->id),
+            ],
+        ], 201);
+    }
+
+    public function sendWhatsApp(SendWhatsAppChatMessageRequest $request, ChatConversation $conversation): JsonResponse
+    {
+        $viewer = $request->user();
+        abort_unless($viewer->isConsultant(), 403, 'Only staff can send WhatsApp messages.');
+        $this->ensureCanAccess($request, $conversation);
+
+        $body = trim($request->string('body')->toString());
+        $attachmentMeta = $this->storeUploadedAttachment($request->file('attachment'), $viewer->id);
+
+        abort_if($body === '' && $attachmentMeta === null, 422, 'Enter a message or attach a file for WhatsApp.');
+
+        $phone = null;
+        if ($conversation->kind === ChatConversation::KIND_STAFF_DM) {
+            $conversation->loadMissing(['staffLow:id,name,email,phone,staff_department', 'staffHigh:id,name,email,phone,staff_department']);
+            $peer = $conversation->staffPeerFor($viewer);
+            $phone = $peer?->phone;
+            abort_if(
+                ! filled($phone),
+                422,
+                'This staff member has no phone number. Add it in Organization team settings.',
+            );
+        } else {
+            abort_unless(
+                $conversation->kind === ChatConversation::KIND_STUDENT_DEPARTMENT,
+                422,
+                'WhatsApp is only available for student and staff chats.',
+            );
+            $conversation->loadMissing([
+                'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
+            ]);
+            $phone = $conversation->student?->studentProfile?->phone;
+        }
+
+        $mediaContents = null;
+        $mediaMime = null;
+        $mediaFilename = null;
+
+        if ($attachmentMeta !== null) {
+            $mediaContents = UploadStorage::disk()->get($attachmentMeta['path']);
+            if ($mediaContents === null || $mediaContents === '') {
+                return response()->json([
+                    'message' => 'Could not read the attachment for WhatsApp.',
+                ], 422);
+            }
+            $mediaMime = $attachmentMeta['mime_type'] ?: null;
+            $mediaFilename = $attachmentMeta['original_name'] ?: 'attachment';
+        }
+
+        try {
+            $whatsappResult = $this->whatsapp->sendMessage(
+                (string) $phone,
+                $body,
+                $mediaContents,
+                $mediaMime,
+                $mediaFilename,
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        $message = $this->storeMessage($conversation, $viewer->id, $body, $attachmentMeta);
+        $this->setTyping($conversation->id, $viewer->id, false);
+        $this->markConversationRead($conversation, $viewer);
+
+        $conversation->load([
+            'student:id,name,email',
+            'student.studentProfile:id,user_id,phone',
+            'consultant:id,name,email',
+            'staffLow:id,name,email,staff_department',
+            'staffHigh:id,name,email,staff_department',
+            'latestMessage.sender:id,name',
+        ]);
+        $conversation->unread_count = 0;
+        $conversation->is_blocked = $conversation->student_id
+            ? $this->isStudentBlocked($conversation->student_id, $conversation->department)
+            : false;
+
+        return response()->json([
+            'data' => [
+                'conversation' => $this->conversationPayload($conversation, $viewer),
+                'message' => $this->messagePayload($message, $viewer->id),
+                'whatsapp' => [
+                    'sent' => true,
+                    'mode' => $whatsappResult['mode'],
+                    'provider_message_id' => $whatsappResult['provider_message_id'],
+                ],
             ],
         ], 201);
     }
@@ -488,6 +694,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'latestMessage.sender:id,name',
         ]);
@@ -524,6 +731,7 @@ class ChatController extends Controller
 
         $conversation->load([
             'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
             'consultant:id,name,email',
             'latestMessage.sender:id,name',
         ]);
@@ -633,6 +841,10 @@ class ChatController extends Controller
             return;
         }
 
+        $sender = User::query()->find($scheduled->sender_id);
+        $conversationId = null;
+        $notice = 'Your scheduled message was sent.';
+
         if ($scheduled->type === ChatScheduledMessage::TYPE_CONVERSATION) {
             $conversation = $scheduled->conversation;
             abort_unless($conversation instanceof ChatConversation, 404, 'Conversation missing for scheduled message.');
@@ -644,6 +856,19 @@ class ChatController extends Controller
                 trim((string) $scheduled->body),
                 $attachment,
             );
+
+            $conversationId = $conversation->id;
+            $conversation->loadMissing([
+                'student:id,name',
+                'staffLow:id,name',
+                'staffHigh:id,name',
+            ]);
+            if ($conversation->isStaffDm() && $sender) {
+                $recipientName = $conversation->staffPeerFor($sender)?->name ?? 'teammate';
+            } else {
+                $recipientName = $conversation->student?->name ?? 'student';
+            }
+            $notice = "Your scheduled message to {$recipientName} was sent.";
         } elseif ($scheduled->type === ChatScheduledMessage::TYPE_BROADCAST) {
             $department = $scheduled->broadcast_department;
             abort_unless($department instanceof StaffDepartment, 422, 'Broadcast department missing.');
@@ -652,7 +877,7 @@ class ChatController extends Controller
             $studentIds = array_values(array_map('intval', $scheduled->broadcast_student_ids ?? []));
             abort_unless($studentIds !== [], 422, 'Broadcast recipients missing.');
 
-            $this->deliverBroadcast(
+            $result = $this->deliverBroadcast(
                 $scheduled->sender_id,
                 $studentIds,
                 trim((string) $scheduled->body),
@@ -660,6 +885,8 @@ class ChatController extends Controller
                 $scheduled->attachmentMeta(),
                 deleteSourceAttachment: false,
             );
+            $notice = "Your scheduled broadcast was sent ({$result['sent_count']} recipient"
+                .($result['sent_count'] === 1 ? '' : 's').').';
         } else {
             throw new \RuntimeException('Unknown scheduled message type.');
         }
@@ -669,6 +896,17 @@ class ChatController extends Controller
             'sent_at' => now(),
             'error_message' => null,
         ]);
+
+        if ($sender) {
+            $this->notifications->createForUser(
+                $sender,
+                $sender,
+                $notice,
+                'chat_scheduled_sent',
+                'chat',
+                $conversationId,
+            );
+        }
     }
 
     private function storeMessage(
@@ -691,7 +929,7 @@ class ChatController extends Controller
         ]);
 
         $message->load('sender:id,name');
-        $conversation->loadMissing('student:id,name,email');
+        $conversation->loadMissing(['student:id,name,email', 'student.studentProfile:id,user_id,phone']);
 
         $preview = $this->messagePreviewText($message);
         $preview = Str::limit($preview, 90);
@@ -921,6 +1159,7 @@ class ChatController extends Controller
         UserNotification::query()
             ->where('user_id', $user->id)
             ->whereNull('read_at')
+            ->where('type', 'chat_message')
             ->where(function (Builder $query) use ($conversation) {
                 $query->where('conversation_id', $conversation->id);
 
@@ -952,6 +1191,7 @@ class ChatController extends Controller
                     'id' => $other?->id,
                     'name' => $other?->name,
                     'email' => $other?->email,
+                    'phone' => $other?->phone,
                     'staff_department' => $other?->staff_department?->value,
                     'staff_department_label' => $other?->staff_department?->label(),
                 ],
@@ -981,6 +1221,7 @@ class ChatController extends Controller
                 'id' => $other?->id,
                 'name' => $displayName,
                 'email' => $other?->email,
+                'phone' => $isStudentViewer ? null : ($other?->studentProfile?->phone),
             ],
             'last_message' => $this->lastMessageSummary($conversation->latestMessage, $viewer->id),
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
@@ -1003,6 +1244,7 @@ class ChatController extends Controller
         $blocks = ChatStudentBlock::query()
             ->with([
                 'student:id,name,email',
+                'student.studentProfile:id,user_id,phone',
                 'blockedBy:id,name,email',
             ])
             ->orderByDesc('blocked_at')

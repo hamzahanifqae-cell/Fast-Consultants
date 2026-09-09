@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Role;
 use App\Enums\StaffDepartment;
 use App\Models\ChatConversation;
+use App\Models\ChatScheduledMessage;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -512,6 +513,39 @@ class ChatTest extends TestCase
         $this->assertDatabaseMissing('chat_messages', [
             'conversation_id' => $conversationId,
             'body' => 'Scheduled note',
+        ]);
+    }
+
+    public function test_due_scheduled_message_is_sent_when_chat_is_polled(): void
+    {
+        $finance = $this->makeStaff('finance@example.com', StaffDepartment::Finance, 'Finance Staff');
+        $student = User::factory()->student()->create(['name' => 'Sara']);
+        $conversationId = $this->seedStudentThread($student, StaffDepartment::Finance);
+
+        ChatScheduledMessage::query()->create([
+            'sender_id' => $finance->id,
+            'type' => ChatScheduledMessage::TYPE_CONVERSATION,
+            'conversation_id' => $conversationId,
+            'body' => 'Due soon',
+            'scheduled_at' => now()->subMinute(),
+            'status' => ChatScheduledMessage::STATUS_PENDING,
+        ]);
+
+        Sanctum::actingAs($finance);
+        $this->getJson("/api/chat/conversations/{$conversationId}/messages")
+            ->assertOk()
+            ->assertJsonFragment(['body' => 'Due soon']);
+
+        $this->assertDatabaseHas('chat_scheduled_messages', [
+            'conversation_id' => $conversationId,
+            'body' => 'Due soon',
+            'status' => 'sent',
+        ]);
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $finance->id,
+            'type' => 'chat_scheduled_sent',
+            'conversation_id' => $conversationId,
         ]);
     }
 

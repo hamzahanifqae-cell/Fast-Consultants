@@ -19,7 +19,7 @@ function resolveRoute(item: UserNotification, isTeam: boolean): string | null {
   const user = useAuthStore.getState().user;
   const portal = orgPortalForUser(user);
 
-  if (item.type === 'chat_message' || item.action === 'chat') {
+  if (item.type === 'chat_message' || item.type === 'chat_scheduled_sent' || item.action === 'chat') {
     return isTeam ? mapNotificationAction('/departments/messages', portal) : StudentRoutes.messages;
   }
 
@@ -117,7 +117,7 @@ export function NotificationBell() {
     if (route) {
       navigate(route);
     }
-    if (item.type === 'chat_message' || item.action === 'chat') {
+    if (item.type === 'chat_message' || item.type === 'chat_scheduled_sent' || item.action === 'chat') {
       void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     }

@@ -485,6 +485,49 @@ export function ChatPanel({
     },
   });
 
+  const sendWhatsApp = useMutation({
+    mutationFn: async ({
+      body,
+      file,
+    }: {
+      body: string;
+      file: PickedAttachment | null;
+    }) => {
+      const formData = new FormData();
+      formData.append('body', body);
+      if (file) {
+        formData.append('attachment', {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType ?? 'application/octet-stream',
+        } as unknown as Blob);
+      }
+      const { data } = await api.post<{
+        data: {
+          conversation: ChatConversation;
+          message: ChatMessage;
+          whatsapp: { sent: boolean; mode: string };
+        };
+      }>(`/chat/conversations/${activeId}/whatsapp`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return data.data;
+    },
+    onSuccess: async () => {
+      setDraft('');
+      setAttachmentFile(null);
+      setScheduleAt(null);
+      setError(null);
+      Alert.alert('Sent', 'Message sent in chat and on WhatsApp.');
+      await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err, 'Could not send WhatsApp message.'));
+    },
+  });
+
   const toggleBlock = useMutation({
     mutationFn: async (blocked: boolean) => {
       if (!activeId) throw new Error('No conversation');
@@ -633,6 +676,60 @@ export function ChatPanel({
     },
     onError: (err) => {
       setError(getApiErrorMessage(err, 'Could not send broadcast.'));
+    },
+  });
+
+  const broadcastWhatsApp = useMutation({
+    mutationFn: async () => {
+      const formData = new FormData();
+      broadcastStudentIds.forEach((id) => formData.append('student_ids[]', String(id)));
+      formData.append('message', broadcastDraft.trim());
+      if (needsBroadcastDepartment && broadcastDepartment) {
+        formData.append('department', broadcastDepartment);
+      }
+      if (broadcastAttachmentFile) {
+        formData.append('attachment', {
+          uri: broadcastAttachmentFile.uri,
+          name: broadcastAttachmentFile.name,
+          type: broadcastAttachmentFile.mimeType ?? 'application/octet-stream',
+        } as unknown as Blob);
+      }
+      const { data } = await api.post<{
+        data: {
+          sent_count: number;
+          skipped_blocked_count: number;
+          whatsapp?: { sent_count: number; failed_count: number };
+        };
+      }>('/chat/broadcast/whatsapp', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return data.data;
+    },
+    onSuccess: (payload) => {
+      setError(null);
+      const wa = payload.whatsapp;
+      const skipped =
+        payload.skipped_blocked_count > 0
+          ? ` Skipped ${payload.skipped_blocked_count} blocked.`
+          : '';
+      const waNote = wa
+        ? ` WhatsApp: ${wa.sent_count} sent${wa.failed_count ? `, ${wa.failed_count} failed` : ''}.`
+        : '';
+      Alert.alert(
+        'Broadcast sent',
+        `Sent to ${payload.sent_count} student${payload.sent_count === 1 ? '' : 's'}.${skipped}${waNote}`,
+      );
+      setBroadcastStudentIds([]);
+      setBroadcastDraft('');
+      setBroadcastDepartment('');
+      setBroadcastSearch('');
+      setBroadcastAttachmentFile(null);
+      setMode('home');
+      void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err, 'Could not send WhatsApp broadcast.'));
     },
   });
 
@@ -851,6 +948,17 @@ export function ChatPanel({
     threadQuery.data?.conversation ?? conversations.find((item) => item.id === activeId);
   const isBlocked = Boolean(activeConversation?.is_blocked);
   const studentComposerLocked = !isConsultant && isBlocked;
+  const canSendWhatsApp =
+    isConsultant &&
+    Boolean(activeId) &&
+    !studentComposerLocked &&
+    !scheduleAt &&
+    (draft.trim().length > 0 || Boolean(attachmentFile));
+
+  function onSendWhatsApp() {
+    if (!canSendWhatsApp) return;
+    sendWhatsApp.mutate({ body: draft.trim(), file: attachmentFile });
+  }
 
   const studentName = activeConversation?.other_user?.name;
   const departmentLabel =
@@ -1243,6 +1351,7 @@ export function ChatPanel({
                   <Pressable
                     disabled={
                       broadcastMessage.isPending ||
+                      broadcastWhatsApp.isPending ||
                       broadcastStudentIds.length === 0 ||
                       (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
                       (needsBroadcastDepartment && !broadcastDepartment)
@@ -1251,6 +1360,7 @@ export function ChatPanel({
                     style={[
                       styles.newChatButton,
                       (broadcastMessage.isPending ||
+                        broadcastWhatsApp.isPending ||
                         broadcastStudentIds.length === 0 ||
                         (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
                         (needsBroadcastDepartment && !broadcastDepartment)) &&
@@ -1262,6 +1372,31 @@ export function ChatPanel({
                         : broadcastScheduleAt
                           ? 'Schedule broadcast'
                           : 'Send broadcast'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={
+                      broadcastMessage.isPending ||
+                      broadcastWhatsApp.isPending ||
+                      Boolean(broadcastScheduleAt) ||
+                      broadcastStudentIds.length === 0 ||
+                      (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
+                      (needsBroadcastDepartment && !broadcastDepartment)
+                    }
+                    onPress={() => broadcastWhatsApp.mutate()}
+                    style={[
+                      styles.newChatButton,
+                      styles.whatsappBroadcastButton,
+                      (broadcastMessage.isPending ||
+                        broadcastWhatsApp.isPending ||
+                        Boolean(broadcastScheduleAt) ||
+                        broadcastStudentIds.length === 0 ||
+                        (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
+                        (needsBroadcastDepartment && !broadcastDepartment)) &&
+                        styles.blockButtonDisabled,
+                    ]}>
+                    <Text style={styles.newChatButtonText}>
+                      {broadcastWhatsApp.isPending ? 'Sending…' : 'WhatsApp broadcast'}
                     </Text>
                   </Pressable>
                 </ScrollView>
@@ -1693,6 +1828,24 @@ export function ChatPanel({
                     style={styles.composerInput}
                     value={draft}
                   />
+                  {isConsultant ? (
+                    <Pressable
+                      disabled={!canSendWhatsApp || sendMessage.isPending || sendWhatsApp.isPending}
+                      onPress={onSendWhatsApp}
+                      style={[
+                        styles.whatsappBtn,
+                        {
+                          opacity:
+                            !canSendWhatsApp || sendMessage.isPending || sendWhatsApp.isPending
+                              ? 0.45
+                              : 1,
+                        },
+                      ]}>
+                      <Text style={styles.whatsappBtnText}>
+                        {sendWhatsApp.isPending ? '…' : 'WA'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     disabled={
                       studentComposerLocked ||
@@ -1904,6 +2057,9 @@ function createChatStyles(
     paddingHorizontal: 14,
     backgroundColor: theme.inverted,
     marginBottom: 4,
+  },
+  whatsappBroadcastButton: {
+    backgroundColor: '#25D366',
   },
   newChatButtonText: {
     color: theme.invertedText,
@@ -2256,6 +2412,20 @@ function createChatStyles(
     backgroundColor: theme.inverted,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  whatsappBtn: {
+    minWidth: 40,
+    height: 36,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    backgroundColor: '#25D366',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whatsappBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   footer: {
     marginTop: 'auto',

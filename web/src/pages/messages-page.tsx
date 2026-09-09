@@ -7,7 +7,7 @@ import { api, getApiErrorMessage } from '@/lib/api';
 import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
 import { isSuperAdminUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
-import type { ChatConversation, ChatStudentBlock } from '@/types/auth';
+import type { ChatConversation, ChatStudentBlock, UserNotification } from '@/types/auth';
 import './dashboard.css';
 
 type ChatAttachment = {
@@ -72,6 +72,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   const [broadcastDepartment, setBroadcastDepartment] = useState('');
   const [broadcastSearch, setBroadcastSearch] = useState('');
   const [broadcastNotice, setBroadcastNotice] = useState<string | null>(null);
+  const [awaitingScheduledSince, setAwaitingScheduledSince] = useState<string | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [broadcastAttachmentFile, setBroadcastAttachmentFile] = useState<File | null>(null);
   const [scheduleAt, setScheduleAt] = useState('');
@@ -300,6 +301,33 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     },
   });
 
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    enabled: isConsultant && Boolean(awaitingScheduledSince),
+    refetchInterval: awaitingScheduledSince ? 2000 : false,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: UserNotification[]; unread_count: number }>(
+        '/notifications',
+        { params: { limit: 20 } },
+      );
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!awaitingScheduledSince) return;
+    const sinceMs = new Date(awaitingScheduledSince).getTime();
+    const hit = (notificationsQuery.data?.data ?? []).find((item) => {
+      if (item.type !== 'chat_scheduled_sent') return false;
+      if (!item.created_at) return true;
+      return new Date(item.created_at).getTime() >= sinceMs - 1000;
+    });
+    if (!hit) return;
+    setBroadcastNotice(hit.message);
+    setAwaitingScheduledSince(null);
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  }, [awaitingScheduledSince, notificationsQuery.data, queryClient]);
+
   useEffect(() => {
     if (threadQuery.isSuccess && activeId != null) {
       queryClient.setQueryData(
@@ -419,12 +447,46 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         setBroadcastNotice(
           `Message scheduled for ${payload.scheduled_at ? new Date(payload.scheduled_at).toLocaleString() : 'later'}.`,
         );
+        setAwaitingScheduledSince(new Date().toISOString());
       }
       await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (err) => setError(getApiErrorMessage(err, 'Could not send message.')),
+  });
+
+  const sendWhatsApp = useMutation({
+    mutationFn: async ({ body, file }: { body: string; file: File | null }) => {
+      const formData = new FormData();
+      formData.append('body', body);
+      if (file) {
+        formData.append('attachment', file);
+      }
+      const { data } = await api.post<{
+        data: {
+          conversation: ChatConversation;
+          message: ChatMessage;
+          whatsapp: { sent: boolean; mode: string };
+        };
+      }>(`/chat/conversations/${activeId}/whatsapp`, formData);
+      return data.data;
+    },
+    onSuccess: async () => {
+      setDraft('');
+      setAttachmentFile(null);
+      setScheduleAt('');
+      setShowScheduleMenu(false);
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = '';
+      }
+      setError(null);
+      setBroadcastNotice('Sent in chat and on WhatsApp.');
+      await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (err) => setError(getApiErrorMessage(err, 'Could not send WhatsApp message.')),
   });
 
   const toggleBlock = useMutation({
@@ -498,6 +560,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         setBroadcastNotice(
           `Broadcast scheduled for ${payload.scheduled_at ? new Date(payload.scheduled_at).toLocaleString() : 'later'}.`,
         );
+        setAwaitingScheduledSince(new Date().toISOString());
       } else {
         const skipped =
           payload.skipped_blocked_count > 0
@@ -523,9 +586,57 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     onError: (err) => setError(getApiErrorMessage(err, 'Could not send broadcast.')),
   });
 
+  const broadcastWhatsApp = useMutation({
+    mutationFn: async () => {
+      const formData = new FormData();
+      broadcastStudentIds.forEach((id) => formData.append('student_ids[]', String(id)));
+      formData.append('message', broadcastDraft.trim());
+      if (needsBroadcastDepartment && broadcastDepartment) {
+        formData.append('department', broadcastDepartment);
+      }
+      if (broadcastAttachmentFile) {
+        formData.append('attachment', broadcastAttachmentFile);
+      }
+      const { data } = await api.post<{
+        data: {
+          sent_count: number;
+          skipped_blocked_count: number;
+          whatsapp?: { sent_count: number; failed_count: number };
+        };
+      }>('/chat/broadcast/whatsapp', formData);
+      return data.data;
+    },
+    onSuccess: (payload) => {
+      setError(null);
+      const wa = payload.whatsapp;
+      const skipped =
+        payload.skipped_blocked_count > 0
+          ? ` Skipped ${payload.skipped_blocked_count} blocked.`
+          : '';
+      const waNote = wa
+        ? ` WhatsApp: ${wa.sent_count} sent${wa.failed_count ? `, ${wa.failed_count} failed` : ''}.`
+        : '';
+      setBroadcastNotice(
+        `Sent to ${payload.sent_count} student${payload.sent_count === 1 ? '' : 's'}.${skipped}${waNote}`,
+      );
+      setBroadcastDraft('');
+      setBroadcastAttachmentFile(null);
+      setBroadcastStudentIds([]);
+      setBroadcastSearch('');
+      if (broadcastAttachmentInputRef.current) {
+        broadcastAttachmentInputRef.current.value = '';
+      }
+      setInboxPanel('menu');
+      void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (err) => setError(getApiErrorMessage(err, 'Could not send WhatsApp broadcast.')),
+  });
+
   function openBroadcastPanel() {
     setError(null);
     setBroadcastNotice(null);
+    setAwaitingScheduledSince(null);
     setActiveId(null);
     setSelectedStudentId(null);
     setInboxPanel('broadcast');
@@ -534,6 +645,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   function openStudentsPanel() {
     setError(null);
     setBroadcastNotice(null);
+    setAwaitingScheduledSince(null);
     setActiveId(null);
     setSelectedStudentId(null);
     setInboxPanel('students');
@@ -617,6 +729,24 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     conversations.find((conversation) => conversation.id === activeId);
   const isBlocked = Boolean(activeConversation?.is_blocked);
   const studentComposerLocked = !isConsultant && isBlocked;
+  const canSendWhatsApp =
+    isConsultant &&
+    Boolean(activeId) &&
+    !studentComposerLocked &&
+    !scheduleAt &&
+    (draft.trim().length > 0 || Boolean(attachmentFile));
+
+  function onSendWhatsApp() {
+    if (!canSendWhatsApp) return;
+    sendWhatsApp.mutate({ body: draft.trim(), file: attachmentFile });
+  }
+
+  const canBroadcastWhatsApp =
+    isConsultant &&
+    !broadcastScheduleAt &&
+    broadcastStudentIds.length > 0 &&
+    (broadcastDraft.trim().length > 0 || Boolean(broadcastAttachmentFile)) &&
+    (!needsBroadcastDepartment || Boolean(broadcastDepartment));
 
   function selectStaffStudent(studentId: number) {
     const matches = studentConversations.filter((item) => item.other_user.id === studentId);
@@ -1304,22 +1434,34 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                         <span className="chat-attach-hint">PDF, JPG, PNG, DOC, video · max 50 MB</span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="chat-broadcast-send"
-                      disabled={
-                        broadcastMessage.isPending ||
-                        broadcastStudentIds.length === 0 ||
-                        (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
-                        (needsBroadcastDepartment && !broadcastDepartment)
-                      }
-                      onClick={() => broadcastMessage.mutate()}>
-                      {broadcastMessage.isPending
-                        ? 'Sending…'
-                        : broadcastScheduleAt
-                          ? 'Schedule broadcast'
-                          : 'Send broadcast'}
-                    </button>
+                      <button
+                        type="button"
+                        className="chat-broadcast-send"
+                        disabled={
+                          broadcastMessage.isPending ||
+                          broadcastWhatsApp.isPending ||
+                          broadcastStudentIds.length === 0 ||
+                          (!broadcastDraft.trim() && !broadcastAttachmentFile) ||
+                          (needsBroadcastDepartment && !broadcastDepartment)
+                        }
+                        onClick={() => broadcastMessage.mutate()}>
+                        {broadcastMessage.isPending
+                          ? 'Sending…'
+                          : broadcastScheduleAt
+                            ? 'Schedule broadcast'
+                            : 'Send broadcast'}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-whatsapp-btn chat-broadcast-whatsapp"
+                        disabled={
+                          !canBroadcastWhatsApp ||
+                          broadcastMessage.isPending ||
+                          broadcastWhatsApp.isPending
+                        }
+                        onClick={() => broadcastWhatsApp.mutate()}>
+                        {broadcastWhatsApp.isPending ? 'Sending…' : 'WhatsApp'}
+                      </button>
                     {error ? <p className="form-error">{error}</p> : null}
                   </div>
                 </>
@@ -1449,6 +1591,20 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     }
                     disabled={!activeId || studentComposerLocked}
                   />
+                  {isConsultant ? (
+                    <button
+                      type="button"
+                      className="chat-whatsapp-btn"
+                      title={
+                        scheduleAt
+                          ? 'Clear schedule to use WhatsApp'
+                          : 'Send text/file in chat and on WhatsApp'
+                      }
+                      disabled={!canSendWhatsApp || sendMessage.isPending || sendWhatsApp.isPending}
+                      onClick={onSendWhatsApp}>
+                      {sendWhatsApp.isPending ? 'Sending…' : 'WhatsApp'}
+                    </button>
+                  ) : null}
                   <button
                     type="submit"
                     disabled={

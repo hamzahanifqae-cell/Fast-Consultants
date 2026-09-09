@@ -92,6 +92,7 @@ class OrganizationUserController extends Controller
         $user = User::query()->create([
             'name' => $request->string('name')->toString(),
             'email' => $request->string('email')->toString(),
+            'phone' => $request->filled('phone') ? $request->string('phone')->toString() : null,
             'password' => $request->string('password')->toString(),
             'staff_department' => $role === Role::Staff ? $department : null,
         ]);
@@ -125,6 +126,12 @@ class OrganizationUserController extends Controller
 
         if ($request->filled('email')) {
             $user->email = $request->string('email')->toString();
+        }
+
+        if ($request->exists('phone')) {
+            $user->phone = $request->filled('phone')
+                ? $request->string('phone')->toString()
+                : null;
         }
 
         if ($request->filled('password')) {

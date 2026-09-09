@@ -22,7 +22,7 @@ use App\Http\Controllers\Api\VisaAppointmentController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:30,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -33,8 +33,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/chat/conversations', [ChatController::class, 'conversations']);
     Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages']);
-    Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'send']);
-    Route::get('/chat/messages/{message}/attachment', [ChatController::class, 'downloadAttachment']);
+        Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'send']);
+        Route::post('/chat/conversations/{conversation}/whatsapp', [ChatController::class, 'sendWhatsApp']);
+        Route::get('/chat/messages/{message}/attachment', [ChatController::class, 'downloadAttachment']);
     Route::post('/chat/conversations/{conversation}/typing', [ChatController::class, 'typing']);
     Route::post('/chat/conversations/{conversation}/block', [ChatController::class, 'block']);
     Route::delete('/chat/conversations/{conversation}/block', [ChatController::class, 'unblock']);
@@ -43,9 +44,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chat/departments', [ChatController::class, 'departments']);
     Route::get('/chat/staff/directory', [ChatController::class, 'staffDirectory']);
     Route::post('/chat/staff/conversations', [ChatController::class, 'startStaff']);
-    Route::post('/chat/broadcast', [ChatController::class, 'broadcast']);
+        Route::post('/chat/broadcast', [ChatController::class, 'broadcast']);
+        Route::post('/chat/broadcast/whatsapp', [ChatController::class, 'broadcastWhatsApp']);
 
-    Route::middleware('role:student')->group(function () {
+        Route::middleware('role:student')->group(function () {
         Route::get('/student/profile', [StudentProfileController::class, 'show']);
         Route::put('/student/profile', [StudentProfileController::class, 'update']);
 

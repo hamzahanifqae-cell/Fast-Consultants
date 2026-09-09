@@ -34,6 +34,7 @@ class UpdateOrganizationUserRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['nullable', 'confirmed', Password::min(8)],
             'role' => ['sometimes', 'required', Rule::in([Role::Admin->value, Role::Staff->value])],
             'staff_department' => [

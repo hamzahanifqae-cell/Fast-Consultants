@@ -19,6 +19,7 @@ import './dashboard.css';
 type Draft = {
   name: string;
   email: string;
+  phone: string;
   password: string;
   password_confirmation: string;
   role: 'admin' | 'staff';
@@ -29,6 +30,7 @@ type Draft = {
 const emptyDraft = (): Draft => ({
   name: '',
   email: '',
+  phone: '',
   password: '',
   password_confirmation: '',
   role: 'staff',
@@ -78,6 +80,7 @@ export function OrganizationTeamPage() {
         const payload: Record<string, unknown> = {
           name: draft.name,
           email: draft.email,
+          phone: draft.phone.trim() || null,
           role: draft.role,
           staff_department: draft.role === 'staff' ? draft.staff_department : null,
           permissions: draft.permissions,
@@ -133,6 +136,7 @@ export function OrganizationTeamPage() {
     setDraft({
       name: member.name,
       email: member.email,
+      phone: member.phone ?? '',
       password: '',
       password_confirmation: '',
       role: (member.roles ?? []).includes('admin') || (member.roles ?? []).includes('consultant') ? 'admin' : 'staff',
@@ -190,6 +194,7 @@ export function OrganizationTeamPage() {
                   <div>
                     <strong>{member.name}</strong>
                     <span>{member.email}</span>
+                    {member.phone ? <span>{member.phone}</span> : null}
                     <span className="org-meta">
                       {member.roles.join(', ')}
                       {member.staff_department_label
@@ -245,6 +250,15 @@ export function OrganizationTeamPage() {
                   value={draft.email}
                   onChange={(event) => setDraft({ ...draft, email: event.target.value })}
                   required
+                />
+              </label>
+              <label className="field">
+                <span>WhatsApp / phone (optional)</span>
+                <input
+                  type="tel"
+                  value={draft.phone}
+                  onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
+                  placeholder="+92 300 1234567"
                 />
               </label>
               <label className="field">

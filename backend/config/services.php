@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'token' => env('WHATSAPP_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
+        'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', '92'),
+        // When true (or when template_name is set), send as template instead of free-form text.
+        'prefer_template' => env('WHATSAPP_PREFER_TEMPLATE', false),
+        // Optional: approved template with body {{1}} for the message text (or hello_world for smoke tests).
+        'template_name' => env('WHATSAPP_TEMPLATE_NAME'),
+        'template_language' => env('WHATSAPP_TEMPLATE_LANGUAGE', 'en_US'),
+    ],
+
 ];

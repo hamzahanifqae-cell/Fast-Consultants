@@ -21,6 +21,7 @@ export type AuthUser = {
   id: number;
   name: string;
   email: string;
+  phone?: string | null;
   roles: string[];
   staff_department?: string | null;
   staff_department_label?: string | null;
@@ -88,6 +89,7 @@ export type ChatConversation = {
     id: number | null;
     name: string | null;
     email: string | null;
+    phone?: string | null;
     staff_department?: string | null;
     staff_department_label?: string | null;
   };

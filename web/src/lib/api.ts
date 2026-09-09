@@ -103,11 +103,37 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
     return 'Cannot reach the server right now. It may be waking up after idle time — wait a few seconds and try again.';
   }
 
+  if (error.response.status === 429) {
+    return 'Too many sign-in attempts. Wait about a minute and try again.';
+  }
+
   const data = error.response.data as
     | { message?: string; errors?: Record<string, string[]> }
+    | string
     | undefined;
 
-  const firstFieldError = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined;
+  if (typeof data === 'string') {
+    const jsonStart = data.indexOf('{');
+    if (jsonStart > 0) {
+      try {
+        const parsed = JSON.parse(data.slice(jsonStart)) as {
+          message?: string;
+          errors?: Record<string, string[]>;
+        };
+        const fieldError = parsed.errors ? Object.values(parsed.errors)[0]?.[0] : undefined;
+        return fieldError ?? parsed.message ?? fallback;
+      } catch {
+        // fall through
+      }
+    }
+  }
 
-  return firstFieldError ?? data?.message ?? fallback;
+  const payload =
+    data && typeof data === 'object'
+      ? data
+      : undefined;
+
+  const firstFieldError = payload?.errors ? Object.values(payload.errors)[0]?.[0] : undefined;
+
+  return firstFieldError ?? payload?.message ?? fallback;
 }
