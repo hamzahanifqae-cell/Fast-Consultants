@@ -35,7 +35,7 @@ return [
         ],
     ],
 
-    'whatsapp' => [
+        'whatsapp' => [
         'token' => env('WHATSAPP_TOKEN'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
         'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
@@ -45,6 +45,11 @@ return [
         // Optional: approved template with body {{1}} for the message text (or hello_world for smoke tests).
         'template_name' => env('WHATSAPP_TEMPLATE_NAME'),
         'template_language' => env('WHATSAPP_TEMPLATE_LANGUAGE', 'en_US'),
+    ],
+
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
     ],
 
 ];

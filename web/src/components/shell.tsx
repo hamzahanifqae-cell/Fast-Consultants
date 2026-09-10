@@ -67,6 +67,11 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
   const showVisa = hasPermission(user, 'visa.view') || hasPermission(user, 'visa.manage');
   const showInterview =
     hasPermission(user, 'interview.view') || hasPermission(user, 'interview.manage');
+  const showLeads =
+    isSuperAdminUser(user) ||
+    hasPermission(user, 'leads.view') ||
+    hasPermission(user, 'leads.manage') ||
+    user?.staff_department === 'leads';
   const showTeam =
     isSuperAdminUser(user) ||
     hasPermission(user, 'users.view') ||
@@ -92,6 +97,7 @@ export function AppShell({ title, subtitle, children, badge: _badge, backTo, bac
 
   const teamLinks: NavItem[] = [
     { to: routes.home, label: 'Dashboard' },
+    ...(showLeads ? [{ to: routes.leads.root, label: 'Leads' }] : []),
     ...(showStudents ? [{ to: routes.studentInfo.root, label: 'Student Info' }] : []),
     ...(showStudents ? [{ to: routes.documents.root, label: 'Documents' }] : []),
     ...(showStudents ? [{ to: routes.formTemplates.root, label: 'Form templates' }] : []),

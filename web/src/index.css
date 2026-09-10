@@ -139,7 +139,7 @@ a.primary-btn,
   line-height: 1.2;
 }
 
-button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row),
+button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option),
 .primary-btn:hover:not(:disabled),
 .ghost-btn:hover:not(:disabled),
 .chat-block-btn:hover:not(:disabled),
@@ -152,7 +152,7 @@ button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row),
   transform: translateY(-1px);
 }
 
-button:active:not(:disabled):not(.shell-nav-link):not(.dept-directory-row),
+button:active:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option),
 .primary-btn:active:not(:disabled),
 .ghost-btn:active:not(:disabled),
 .chat-block-btn:active:not(:disabled),

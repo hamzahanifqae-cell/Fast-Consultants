@@ -18,8 +18,10 @@ import { ConsultantUniversitySuggestionsPage } from '@/pages/consultant-universi
 import { ConsultantVisaPage } from '@/pages/consultant-visa-page';
 import { HomePage } from '@/pages/home-page';
 import { LandingPage } from '@/pages/landing-page';
+import { LeadingPage } from '@/pages/leading-page';
 import { LoginPage } from '@/pages/login-page';
 import { MessagesPage } from '@/pages/messages-page';
+import { ConsultantLeadsPage } from '@/pages/consultant-leads-page';
 import { OrganizationTeamPage } from '@/pages/organization-team-page';
 import { RegisterPage, TeamRegisterBlocked } from '@/pages/register-page';
 import { StudentChargeReceiptsPage } from '@/pages/student-charge-receipts-page';
@@ -62,6 +64,7 @@ export default function App() {
           <Route element={<GuestOnly />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/welcome" element={<LandingPage />} />
+            <Route path="/apply" element={<LeadingPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/register" element={<Navigate to="/student/register" replace />} />
           </Route>
@@ -120,6 +123,7 @@ export default function App() {
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />
+              <Route path="departments/leads" element={<ConsultantLeadsPage />} />
               <Route path="messages" element={<MessagesPage isConsultant />} />
               <Route path="team" element={<OrganizationTeamPage />} />
             </Route>
@@ -158,6 +162,7 @@ export default function App() {
               <Route path="departments/finance" element={<ConsultantFinancePage />} />
               <Route path="departments/interview" element={<ConsultantVisaPage focus="interview" />} />
               <Route path="departments/visa" element={<ConsultantVisaPage focus="visa" />} />
+              <Route path="departments/leads" element={<ConsultantLeadsPage />} />
               <Route path="messages" element={<MessagesPage isConsultant />} />
               <Route path="team" element={<OrganizationTeamPage />} />
             </Route>

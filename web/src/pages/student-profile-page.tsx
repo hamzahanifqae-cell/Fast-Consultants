@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { PageBackButton } from '@/components/page-back-button';
@@ -333,12 +333,8 @@ export function StudentProfilePage() {
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [activeSection, setActiveSection] = useState<ProfileSection>('personal');
   const [error, setError] = useState<string | null>(null);
-  const [passportFile, setPassportFile] = useState<File | null>(null);
-  const [cnicFile, setCnicFile] = useState<File | null>(null);
   const [educationFiles, setEducationFiles] = useState<Record<string, File | null>>({});
   const [documentError, setDocumentError] = useState<string | null>(null);
-  const passportFileRef = useRef<HTMLInputElement>(null);
-  const cnicFileRef = useRef<HTMLInputElement>(null);
 
   const profileQuery = useQuery({
     queryKey: ['student-profile'],
@@ -355,16 +351,6 @@ export function StudentProfilePage() {
       return data.data;
     },
   });
-
-  const existingPassportDoc = useMemo(
-    () => documentsQuery.data?.find((doc) => doc.type === 'passport') ?? null,
-    [documentsQuery.data],
-  );
-
-  const existingCnicDoc = useMemo(
-    () => documentsQuery.data?.find((doc) => doc.type === 'cnic') ?? null,
-    [documentsQuery.data],
-  );
 
   useEffect(() => {
     if (profileQuery.data) {
@@ -439,28 +425,6 @@ export function StudentProfilePage() {
       const docs = queryClient.getQueryData<StudentDocument[]>(['student-documents']) ?? [];
       const uploads: Promise<void>[] = [];
 
-      if (passportFile) {
-        uploads.push(
-          uploadStudentDocument({
-            type: 'passport',
-            title: 'Passport bio page',
-            file: passportFile,
-            existing: docs.find((doc) => doc.type === 'passport') ?? null,
-          }),
-        );
-      }
-
-      if (cnicFile) {
-        uploads.push(
-          uploadStudentDocument({
-            type: 'cnic',
-            title: 'CNIC',
-            file: cnicFile,
-            existing: docs.find((doc) => doc.type === 'cnic') ?? null,
-          }),
-        );
-      }
-
       for (const entry of payload.educations) {
         const file = educationFiles[entry.key];
         const educationMeta = documentTypeForEducationLevel(entry.education_level);
@@ -487,11 +451,7 @@ export function StudentProfilePage() {
     onSuccess: async (profile) => {
       setError(null);
       setDocumentError(null);
-      setPassportFile(null);
-      setCnicFile(null);
       setEducationFiles({});
-      if (passportFileRef.current) passportFileRef.current.value = '';
-      if (cnicFileRef.current) cnicFileRef.current.value = '';
       setForm(toForm(profile));
       await queryClient.invalidateQueries({ queryKey: ['student-profile'] });
       await queryClient.invalidateQueries({ queryKey: ['student-documents'] });
@@ -518,17 +478,9 @@ export function StudentProfilePage() {
         existing: docs.find((doc) => doc.type === payload.type) ?? null,
       });
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async () => {
       setDocumentError(null);
-      if (variables.type === 'passport') {
-        setPassportFile(null);
-        if (passportFileRef.current) passportFileRef.current.value = '';
-      } else if (variables.type === 'cnic') {
-        setCnicFile(null);
-        if (cnicFileRef.current) cnicFileRef.current.value = '';
-      } else {
-        setEducationFiles({});
-      }
+      setEducationFiles({});
       await queryClient.invalidateQueries({ queryKey: ['student-documents'] });
       await queryClient.invalidateQueries({ queryKey: ['student-application-status'] });
     },
@@ -825,93 +777,6 @@ export function StudentProfilePage() {
                     required
                   />
                 </label>
-
-                <div className="field education-doc-upload">
-                  <span>Upload passport bio page</span>
-                  <p className="muted" style={{ margin: 0 }}>
-                    Saved uploads appear on your Documents page as pending for approval.
-                  </p>
-                  {existingPassportDoc ? (
-                    <p className="muted" style={{ margin: 0 }}>
-                      On file: {existingPassportDoc.original_name} (
-                      {existingPassportDoc.status_label})
-                    </p>
-                  ) : null}
-                  <input
-                    ref={passportFileRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    disabled={uploadDocument.isPending || saveProfile.isPending}
-                    onChange={(event) => {
-                      setDocumentError(null);
-                      setPassportFile(event.target.files?.[0] ?? null);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    disabled={
-                      !passportFile || uploadDocument.isPending || saveProfile.isPending
-                    }
-                    onClick={() =>
-                      uploadDocument.mutate({
-                        type: 'passport',
-                        title: 'Passport bio page',
-                        file: passportFile!,
-                      })
-                    }>
-                    {uploadDocument.isPending
-                      ? 'Uploading…'
-                      : existingPassportDoc &&
-                          (existingPassportDoc.status === 'pending' ||
-                            existingPassportDoc.status === 'rejected')
-                        ? 'Replace passport'
-                        : 'Upload passport'}
-                  </button>
-                </div>
-
-                <div className="field education-doc-upload">
-                  <span>Upload CNIC</span>
-                  <p className="muted" style={{ margin: 0 }}>
-                    Saved uploads appear on your Documents page as pending for approval.
-                  </p>
-                  {existingCnicDoc ? (
-                    <p className="muted" style={{ margin: 0 }}>
-                      On file: {existingCnicDoc.original_name} ({existingCnicDoc.status_label})
-                    </p>
-                  ) : null}
-                  <input
-                    ref={cnicFileRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    disabled={uploadDocument.isPending || saveProfile.isPending}
-                    onChange={(event) => {
-                      setDocumentError(null);
-                      setCnicFile(event.target.files?.[0] ?? null);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    disabled={!cnicFile || uploadDocument.isPending || saveProfile.isPending}
-                    onClick={() =>
-                      uploadDocument.mutate({
-                        type: 'cnic',
-                        title: 'CNIC',
-                        file: cnicFile!,
-                      })
-                    }>
-                    {uploadDocument.isPending
-                      ? 'Uploading…'
-                      : existingCnicDoc &&
-                          (existingCnicDoc.status === 'pending' ||
-                            existingCnicDoc.status === 'rejected')
-                        ? 'Replace CNIC'
-                        : 'Upload CNIC'}
-                  </button>
-                </div>
-
-                {documentError ? <p className="form-error">{documentError}</p> : null}
                   </>
                 ) : null}
 
@@ -1140,7 +1005,7 @@ export function StudentProfilePage() {
                     saveProfile.isPending || uploadDocument.isPending || profileQuery.isLoading
                   }>
                   {saveProfile.isPending
-                    ? passportFile || cnicFile || Object.values(educationFiles).some(Boolean)
+                    ? Object.values(educationFiles).some(Boolean)
                       ? 'Saving and uploading…'
                       : 'Saving…'
                     : activeSection === 'other'

@@ -13,6 +13,8 @@ export type PermissionName =
   | 'visa.manage'
   | 'interview.view'
   | 'interview.manage'
+  | 'leads.view'
+  | 'leads.manage'
   | 'users.view'
   | 'users.manage'
   | 'permissions.assign';

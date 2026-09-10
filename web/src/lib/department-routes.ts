@@ -35,6 +35,9 @@ export function departmentRoutes(portal: Exclude<Portal, 'student'>) {
     visa: {
       root: `${base}/departments/visa`,
     },
+    leads: {
+      root: `${base}/departments/leads`,
+    },
     messages: {
       root: `${base}/messages`,
     },
@@ -102,6 +105,7 @@ export function mapNotificationAction(
     '/departments/finance': routes.finance.root,
     '/departments/interview': routes.interview.root,
     '/departments/visa': routes.visa.root,
+    '/departments/leads': routes.leads.root,
     '/departments/messages': routes.messages.root,
     '/departments/team': routes.team.root,
   };

@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
      * - student_info@example.com
      * - visa@example.com
      * - interview@example.com
+     * - leads@example.com
      */
     public function run(): void
     {

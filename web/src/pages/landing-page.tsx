@@ -39,12 +39,6 @@ const PORTALS: PortalOption[] = [
   },
 ];
 
-const HIGHLIGHTS = [
-  'One pipeline from profile to visa approval',
-  'Separate portals for each role',
-  'Real-time messages and document reviews',
-];
-
 const ease = [0.22, 1, 0.36, 1] as const;
 
 /** GPU-friendly: opacity + transform only (no blur/scale on load). */
@@ -105,20 +99,6 @@ export function LandingPage() {
             <span className="landing-title-line">Fast</span>
             <span className="landing-title-line landing-title-accent">Consultants</span>
           </m.h1>
-
-          <m.p className="auth-sub landing-sub" variants={fadeUp}>
-            A professional platform for study abroad admissions, students apply and track
-            progress, while your team manages every department in one place.
-          </m.p>
-
-          <m.ul className="landing-highlights" variants={stagger}>
-            {HIGHLIGHTS.map((line) => (
-              <m.li key={line} variants={fadeUp}>
-                <span className="landing-highlight-dot" />
-                {line}
-              </m.li>
-            ))}
-          </m.ul>
         </m.section>
 
         <m.section
@@ -158,7 +138,11 @@ export function LandingPage() {
               initial={motionInitial}
               animate="visible"
               variants={fadeIn}>
-              Each portal accepts only its matching account type.
+              New applicant?{' '}
+              <Link to="/apply" className="landing-apply-link">
+                Fill the leading form
+              </Link>
+              . Each portal accepts only its matching account type.
             </m.p>
           </div>
         </m.section>

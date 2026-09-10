@@ -149,6 +149,25 @@ html[data-theme='dark'] .searchable-select-option.selected {
   color: #ff8fa3;
 }
 
+html[data-theme='dark'] .enquiry-page .searchable-select-option,
+html[data-theme='dark'] .enquiry-page .searchable-select-option:hover,
+html[data-theme='dark'] .enquiry-page .searchable-select-option.selected,
+html[data-theme='dark'] .enquiry-page .searchable-select-option.selected:hover {
+  background: #fff;
+  color: #1a1b1f;
+}
+
+html[data-theme='dark'] .enquiry-page .searchable-select-option:hover,
+html[data-theme='dark'] .enquiry-page .searchable-select-option.selected {
+  background: #fff0f3;
+  color: #e02a48;
+}
+
+html[data-theme='dark'] .enquiry-page .searchable-select-option.selected:hover {
+  background: #ffd6df;
+  color: #e02a48;
+}
+
 .searchable-select-empty {
   margin: 0;
   padding: 16px 12px;

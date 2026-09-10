@@ -9,6 +9,7 @@ enum StaffDepartment: string
     case StudentInfo = 'student_info';
     case Visa = 'visa';
     case Interview = 'interview';
+    case Leads = 'leads';
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum StaffDepartment: string
             self::StudentInfo => 'Student Info Collector',
             self::Visa => 'File Making Related',
             self::Interview => 'Interview',
+            self::Leads => 'Leads / Admissions',
         };
     }
 
@@ -29,6 +31,7 @@ enum StaffDepartment: string
             self::StudentInfo => Permission::StudentInfoView,
             self::Visa => Permission::VisaView,
             self::Interview => Permission::InterviewView,
+            self::Leads => Permission::LeadsView,
         };
     }
 
@@ -40,6 +43,7 @@ enum StaffDepartment: string
             self::StudentInfo => Permission::StudentInfoManage,
             self::Visa => Permission::VisaManage,
             self::Interview => Permission::InterviewManage,
+            self::Leads => Permission::LeadsManage,
         };
     }
 
@@ -71,6 +75,16 @@ enum StaffDepartment: string
                 Permission::InterviewView,
                 Permission::InterviewManage,
             ],
+            self::Leads => [
+                Permission::LeadsView,
+                Permission::LeadsManage,
+            ],
         };
+    }
+
+    /** Whether students can open a chat with this department. */
+    public function acceptsStudentChat(): bool
+    {
+        return $this !== self::Leads;
     }
 }

@@ -271,7 +271,8 @@
   gap: 12px;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -287,15 +288,24 @@
     background 0.15s ease;
 }
 
-.field input::placeholder {
+.field textarea {
+  resize: vertical;
+  min-height: 96px;
+  font-family: inherit;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
   color: var(--muted);
 }
 
-.field input:hover {
+.field input:hover,
+.field textarea:hover {
   border-color: color-mix(in srgb, var(--line) 70%, var(--ink));
 }
 
-.field input:focus {
+.field input:focus,
+.field textarea:focus {
   border-color: var(--accent);
   background: var(--surface);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\StudentNotificationController;
 use App\Http\Controllers\Api\StudentDocumentController;
 use App\Http\Controllers\Api\StudentProfileController;
 use App\Http\Controllers\Api\InterviewVideoController;
+use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\OrganizationUserController;
 use App\Http\Controllers\Api\UniversityController;
 use App\Http\Controllers\Api\UniversitySuggestionController;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:30,1');
+Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -132,6 +134,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/consultant/form-templates', [FormTemplateController::class, 'store']);
         Route::patch('/consultant/form-templates/{formTemplateAssignment}/status', [FormTemplateController::class, 'updateStatus']);
         Route::delete('/consultant/form-templates/{formTemplateAssignment}', [FormTemplateController::class, 'destroy']);
+
+        Route::get('/consultant/leads', [LeadController::class, 'index']);
+        Route::get('/consultant/leads/{lead}', [LeadController::class, 'show']);
+        Route::post('/consultant/leads/{lead}/convert', [LeadController::class, 'convert']);
+        Route::post('/consultant/leads/{lead}/dismiss', [LeadController::class, 'dismiss']);
 
         Route::get('/consultant/universities', [UniversityController::class, 'consultantIndex']);
         Route::post('/consultant/universities', [UniversityController::class, 'store']);

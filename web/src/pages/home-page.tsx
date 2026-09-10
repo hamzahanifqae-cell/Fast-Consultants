@@ -1039,6 +1039,10 @@ function StaffHome({
   const showVisa = hasPermission(user, 'visa.view') || hasPermission(user, 'visa.manage');
   const showInterview =
     hasPermission(user, 'interview.view') || hasPermission(user, 'interview.manage');
+  const showLeads =
+    hasPermission(user, 'leads.view') ||
+    hasPermission(user, 'leads.manage') ||
+    user?.staff_department === 'leads';
   const worksWithStudents = showStudents || showFinance || showVisa || showInterview;
 
   const studentsQuery = useQuery({
@@ -1202,6 +1206,15 @@ function StaffHome({
                       <div>
                         <strong>File Making</strong>
                         <span>Embassy appointments</span>
+                      </div>
+                      <span className="workspace-link-meta">Open</span>
+                    </Link>
+                  ) : null}
+                  {showLeads ? (
+                    <Link className="workspace-link" to={routes.leads.root}>
+                      <div>
+                        <strong>Leads</strong>
+                        <span>Review leading-page forms and create logins</span>
                       </div>
                       <span className="workspace-link-meta">Open</span>
                     </Link>

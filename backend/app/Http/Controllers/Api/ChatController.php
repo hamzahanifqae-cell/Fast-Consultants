@@ -44,6 +44,7 @@ class ChatController extends Controller
     {
         return response()->json([
             'data' => collect(StaffDepartment::cases())
+                ->filter(fn (StaffDepartment $department) => $department->acceptsStudentChat())
                 ->map(fn (StaffDepartment $department) => [
                     'value' => $department->value,
                     'label' => $department->label(),

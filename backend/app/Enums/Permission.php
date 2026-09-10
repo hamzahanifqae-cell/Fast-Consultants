@@ -19,6 +19,9 @@ enum Permission: string
     case InterviewView = 'interview.view';
     case InterviewManage = 'interview.manage';
 
+    case LeadsView = 'leads.view';
+    case LeadsManage = 'leads.manage';
+
     case UsersView = 'users.view';
     case UsersManage = 'users.manage';
     case PermissionsAssign = 'permissions.assign';
@@ -36,6 +39,8 @@ enum Permission: string
             self::VisaManage => 'Manage File Making',
             self::InterviewView => 'View interviews',
             self::InterviewManage => 'Manage interviews',
+            self::LeadsView => 'View leads',
+            self::LeadsManage => 'Manage leads',
             self::UsersView => 'View organization users',
             self::UsersManage => 'Manage organization users',
             self::PermissionsAssign => 'Assign permissions',
