@@ -235,7 +235,11 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   <button
                     className="primary-btn"
                     type="submit"
-                    disabled={updateApplication.isPending || Boolean(interviewLock)}>
+                    disabled={
+                      updateApplication.isPending ||
+                      Boolean(interviewLock) ||
+                      !interviewAt.trim()
+                    }>
                     Unlock / update interview
                   </button>
                 </form>

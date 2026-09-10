@@ -286,7 +286,7 @@ export function ConsultantFinancePage() {
                 <input value={title} onChange={(event) => setTitle(event.target.value)} required />
               </label>
               <label className="field">
-                <span>Amount (optional)</span>
+                <span>Amount</span>
                 <input value={amount} onChange={(event) => setAmount(event.target.value)} />
               </label>
               <label className="field">

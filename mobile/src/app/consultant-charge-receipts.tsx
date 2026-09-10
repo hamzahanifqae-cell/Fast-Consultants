@@ -188,7 +188,7 @@ export default function ConsultantChargeReceiptsScreen() {
             <TextInput
               keyboardType="decimal-pad"
               onChangeText={setAmount}
-              placeholder="Amount (optional)"
+              placeholder="Amount"
               placeholderTextColor={theme.textSecondary}
               style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
               value={amount}

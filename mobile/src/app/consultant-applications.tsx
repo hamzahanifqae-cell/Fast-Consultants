@@ -255,12 +255,15 @@ export default function ConsultantApplicationsScreen() {
               ) : null}
 
               <Pressable
-                disabled={interviewBlocked || updateApplication.isPending}
+                disabled={interviewBlocked || updateApplication.isPending || !interviewAt.trim()}
                 onPress={() => updateApplication.mutate()}
                 style={[
                   styles.button,
                   {
-                    opacity: interviewBlocked || updateApplication.isPending ? 0.6 : 1,
+                    opacity:
+                      interviewBlocked || updateApplication.isPending || !interviewAt.trim()
+                        ? 0.6
+                        : 1,
                   },
                 ]}>
                 <ThemedText type="smallBold" style={styles.buttonText}>
