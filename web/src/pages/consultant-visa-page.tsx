@@ -7,6 +7,7 @@ import { AppShell } from '@/components/shell';
 import { useDepartmentStudentParam } from '@/hooks/use-department-student-param';
 import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
+import { fromDateTimeLocalValue, toDateTimeLocalValue } from '@/lib/datetime-local';
 import type { StudentApplication, VisaAppointment } from '@/types/auth';
 import './dashboard.css';
 
@@ -69,11 +70,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
     if (!application?.preparation || !application.interview) return;
     setPrepTitle(application.preparation.title ?? 'Interview preparation');
     setPrepBody(application.preparation.body ?? '');
-    setInterviewAt(
-      application.interview.at
-        ? new Date(application.interview.at).toISOString().slice(0, 16)
-        : '',
-    );
+    setInterviewAt(toDateTimeLocalValue(application.interview.at));
     setInterviewMode(application.interview.mode ?? 'Online');
     setInterviewLocation(application.interview.location ?? '');
     setInterviewNotes(application.interview.notes ?? '');
@@ -91,7 +88,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
         interview_notes: interviewNotes.trim() || null,
       };
       if (interviewAt.trim()) {
-        payload.interview_at = new Date(interviewAt.trim()).toISOString();
+        payload.interview_at = fromDateTimeLocalValue(interviewAt.trim());
       }
       await api.put(`/consultant/applications/${studentId}`, payload);
     },

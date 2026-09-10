@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { handoffLockMessage, useStudentHandoff } from '@/hooks/use-student-handoff';
 import { api, getApiErrorMessage } from '@/lib/api';
+import { fromDateTimeLocalValue, toDateTimeLocalValue } from '@/lib/datetime-local';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApplicationStatusResponse, StudentApplication } from '@/types/auth';
 import { isOrganizationUser } from '@/lib/roles';
@@ -57,11 +58,7 @@ export default function ConsultantApplicationsScreen() {
 
   useEffect(() => {
     if (!selected) return;
-    setInterviewAt(
-      selected.interview.at
-        ? new Date(selected.interview.at).toISOString().slice(0, 16).replace('T', ' ')
-        : '',
-    );
+    setInterviewAt(toDateTimeLocalValue(selected.interview.at, ' '));
   }, [selected?.id, selected?.interview.at]);
 
   const updateApplication = useMutation({
@@ -80,7 +77,7 @@ export default function ConsultantApplicationsScreen() {
       };
 
       if (interviewAt.trim()) {
-        payload.interview_at = new Date(interviewAt.trim()).toISOString();
+        payload.interview_at = fromDateTimeLocalValue(interviewAt.trim());
       }
 
       const { data } = await api.put<{ data: ApplicationStatusResponse }>(
@@ -145,11 +142,7 @@ export default function ConsultantApplicationsScreen() {
     setSelectedId(studentId);
     setPrepTitle(application.preparation?.title ?? 'Interview preparation');
     setPrepBody(application.preparation?.body ?? '');
-    setInterviewAt(
-      application.interview?.at
-        ? new Date(application.interview.at).toISOString().slice(0, 16).replace('T', ' ')
-        : '',
-    );
+    setInterviewAt(toDateTimeLocalValue(application.interview?.at, ' '));
     setInterviewMode(application.interview?.mode ?? 'Online');
     setInterviewLocation(application.interview?.location ?? '');
     setInterviewNotes(application.interview?.notes ?? '');

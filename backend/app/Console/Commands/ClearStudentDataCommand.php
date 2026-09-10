@@ -66,8 +66,10 @@ class ClearStudentDataCommand extends Command
                 $receipt->deleteStudentFile();
             });
 
-            // Explicit cleanup for tables that may retain staff-only leftovers.
-            ChatConversation::query()->delete();
+            // Explicit cleanup for student operational data (keep staff↔staff DMs).
+            ChatConversation::query()
+                ->where('kind', '!=', ChatConversation::KIND_STAFF_DM)
+                ->delete();
             ChatStudentBlock::query()->delete();
             Question::query()->delete();
             StudentApplication::query()->delete();

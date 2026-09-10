@@ -13,9 +13,11 @@ use App\Models\User;
 use App\Services\DepartmentHandoffService;
 use App\Services\StudentApplicationService;
 use App\Services\StudentNotificationService;
+use App\Support\DisplayTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class StudentApplicationController extends Controller
@@ -131,12 +133,15 @@ class StudentApplicationController extends Controller
             $application->preparation_completed_at = $application->preparation_completed_at ?? now();
         }
 
+        $interviewAtChanged = false;
+
         if ($request->exists('interview_at')) {
             $incomingAt = $request->input('interview_at');
-            $previousAt = $application->interview_at?->toIso8601String();
-            $nextAt = $incomingAt ? (string) $incomingAt : null;
+            $previous = $application->interview_at;
+            $next = $incomingAt ? Carbon::parse((string) $incomingAt) : null;
+            $interviewAtChanged = ($previous?->getTimestamp() ?? null) !== ($next?->getTimestamp() ?? null);
 
-            if ($nextAt !== $previousAt) {
+            if ($interviewAtChanged) {
                 $application->interview_reminder_1h_sent_at = null;
                 $application->interview_reminder_15m_sent_at = null;
                 $application->interview_starting_sent_at = null;
@@ -195,8 +200,8 @@ class StudentApplicationController extends Controller
             );
         }
 
-        if ($request->filled('interview_at') && $application->interview_at) {
-            $when = $application->interview_at->format('M j, Y \a\t g:i A');
+        if ($interviewAtChanged && $application->interview_at) {
+            $when = DisplayTime::format($application->interview_at) ?? '';
             $this->notifications->createForStudent(
                 $student,
                 $request->user(),

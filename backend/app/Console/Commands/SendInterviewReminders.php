@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\InterviewStatus;
 use App\Models\StudentApplication;
 use App\Services\StudentNotificationService;
+use App\Support\DisplayTime;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -25,28 +26,35 @@ class SendInterviewReminders extends Command
         $now = now();
         $sent = 0;
 
-        $sent += $this->sendWindowReminders(
+        // Catch-up windows so a missed cron minute still delivers the reminder once.
+        $sent += $this->sendDueReminders(
             column: 'interview_reminder_1h_sent_at',
-            from: $now->copy()->addMinutes(59),
-            to: $now->copy()->addMinutes(61),
+            dueBy: $now->copy()->addHour(),
+            notAfter: $now->copy()->addMinutes(20),
             type: 'interview_reminder',
-            message: fn (Carbon $at) => 'Interview reminder: your session starts in about 1 hour ('.$at->format('M j, g:i A').').',
+            message: fn (Carbon $at) => 'Interview reminder: your session starts in about 1 hour ('
+                .DisplayTime::format($at, 'M j, g:i A').').',
         );
 
-        $sent += $this->sendWindowReminders(
+        $sent += $this->sendDueReminders(
             column: 'interview_reminder_15m_sent_at',
-            from: $now->copy()->addMinutes(14),
-            to: $now->copy()->addMinutes(16),
+            dueBy: $now->copy()->addMinutes(15),
+            notAfter: $now->copy()->addMinutes(2),
             type: 'interview_reminder_urgent',
-            message: fn (Carbon $at) => 'Interview starting soon, 15 minutes until '.$at->format('g:i A').'. Join your prep video call now.',
+            message: fn (Carbon $at) => 'Interview starting soon, 15 minutes until '
+                .DisplayTime::format($at, 'g:i A')
+                .'. Join your prep video call now.',
         );
 
-        $sent += $this->sendWindowReminders(
+        $sent += $this->sendDueReminders(
             column: 'interview_starting_sent_at',
-            from: $now->copy()->subMinute(),
-            to: $now->copy()->addMinute(),
+            dueBy: $now->copy()->addMinute(),
+            notAfter: $now->copy()->subMinutes(5),
             type: 'interview_starting',
-            message: fn (Carbon $at) => 'Your interview preparation session is starting now ('.$at->format('g:i A').'). Open Interview to join the video call.',
+            message: fn (Carbon $at) => 'Your interview preparation session is starting now ('
+                .DisplayTime::format($at, 'g:i A')
+                .'). Open Interview to join the video call.',
+            allowPast: true,
         );
 
         $this->info("Sent {$sent} interview reminder(s).");
@@ -57,19 +65,25 @@ class SendInterviewReminders extends Command
     /**
      * @param  callable(Carbon): string  $message
      */
-    private function sendWindowReminders(
+    private function sendDueReminders(
         string $column,
-        Carbon $from,
-        Carbon $to,
+        Carbon $dueBy,
+        Carbon $notAfter,
         string $type,
         callable $message,
+        bool $allowPast = false,
     ): int {
         $applications = StudentApplication::query()
             ->with('student:id,name,email')
             ->whereNotNull('interview_at')
             ->whereNull($column)
             ->where('interview_status', InterviewStatus::Scheduled)
-            ->whereBetween('interview_at', [$from, $to])
+            ->where('interview_at', '<=', $dueBy)
+            ->when(
+                $allowPast,
+                fn ($query) => $query->where('interview_at', '>=', $notAfter),
+                fn ($query) => $query->where('interview_at', '>', $notAfter),
+            )
             ->get();
 
         foreach ($applications as $application) {
