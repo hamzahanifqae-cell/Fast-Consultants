@@ -56,6 +56,35 @@ class LeadFlowTest extends TestCase
         ]);
     }
 
+    public function test_far_intake_year_is_classified_as_future(): void
+    {
+        $this->postJson('/api/leads', [
+            'name' => 'Far Intake',
+            'email' => 'far.intake@example.com',
+            'phone' => '+923001112244',
+            'city' => 'Lahore',
+            'preferred_country' => 'USA',
+            'study_level' => "Master's",
+            'intended_program' => 'AI',
+            'preferred_intake' => 'Fall',
+            'intake_year' => 2030,
+            'qualification' => "Bachelor's degree",
+            'grade' => '3.5 / 4.0',
+            'english_status' => 'Planning to Take',
+            'budget_range' => '$20,000–$30,000',
+            'services' => ['University Selection', 'Complete Guidance'],
+            'contact_method' => 'WhatsApp',
+            'source' => 'leading_page',
+        ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('leads', [
+            'email' => 'far.intake@example.com',
+            'status' => LeadStatus::Classified->value,
+            'classification' => LeadClassification::Future->value,
+        ]);
+    }
+
     public function test_leads_staff_can_convert_lead_to_student(): void
     {
         $staff = $this->makeLeadsStaff();

@@ -36,6 +36,7 @@ class LeadClassifierService
     private function classifyWithOpenAi(Lead $lead, string $apiKey): array
     {
         $model = (string) config('services.openai.model', 'gpt-4o-mini');
+        $currentYear = (int) now()->year;
         $payload = [
             'name' => $lead->name,
             'email' => $lead->email,
@@ -47,6 +48,7 @@ class LeadClassifierService
             'budget_range' => $lead->budget_range,
             'preferred_intake' => $lead->preferred_intake,
             'intake_year' => $lead->intake_year,
+            'current_year' => $currentYear,
             'qualification' => $lead->qualification,
             'grade' => $lead->grade,
             'english_status' => $lead->english_status,
@@ -67,8 +69,9 @@ class LeadClassifierService
                         'role' => 'system',
                         'content' => 'You classify study-abroad lead forms for an education consultancy. '
                             .'Return JSON with keys: classification (interested|future|ignore), score (0-100), reason (short). '
-                            .'interested = ready to start soon with clear intent. '
-                            .'future = genuine but later/vague timeline. '
+                            .'interested = ready to start in the current year or next year only (intake_year <= current_year + 1). '
+                            .'future = genuine interest but intake_year is 2 or more years ahead (e.g. 2030 when current_year is 2026), or vague/later timeline. '
+                            .'Season words like Fall/Spring alone do NOT mean interested if intake_year is far away. '
                             .'ignore = spam, incomplete, or not a real prospect.',
                     ],
                     [
@@ -88,6 +91,17 @@ class LeadClassifierService
         $score = max(0, min(100, (int) ($parsed['score'] ?? 50)));
         $reason = trim((string) ($parsed['reason'] ?? 'Model classification complete.'));
 
+        // Hard guard: far intake years must not be marked interested even if the model errs.
+        $intakeYear = $this->intakeYearValue($lead);
+        if (
+            $classification === LeadClassification::Interested
+            && $intakeYear !== null
+            && $intakeYear >= $currentYear + 2
+        ) {
+            $classification = LeadClassification::Future;
+            $reason = trim($reason.' Intake year '.$intakeYear.' is later, so this is for the future.');
+        }
+
         return [
             'classification' => $classification,
             'score' => $score,
@@ -103,9 +117,11 @@ class LeadClassifierService
     {
         $score = 35;
         $reasons = [];
+        $currentYear = (int) now()->year;
+        $intakeYear = $this->intakeYearValue($lead);
 
         $message = strtolower(trim((string) $lead->message));
-        $timeline = strtolower(trim(implode(' ', array_filter([
+        $timelineText = strtolower(trim(implode(' ', array_filter([
             (string) $lead->timeline,
             (string) $lead->preferred_intake,
             (string) $lead->intake_year,
@@ -169,23 +185,49 @@ class LeadClassifierService
             }
         }
 
-        $soonHints = ['asap', 'this month', 'next month', 'immediate', 'urgent', 'ready', 'soon', '2026', 'spring', 'fall'];
-        $laterHints = ['next year', '2028', '2029', 'maybe', 'thinking', 'not sure', 'later', 'future'];
+        $soonHints = ['asap', 'this month', 'next month', 'immediate', 'urgent', 'ready now', 'this year'];
+        $laterHints = ['next year', 'maybe', 'thinking', 'not sure', 'later', 'future', 'in a few years'];
 
         $timelineSoon = false;
-        foreach ($soonHints as $hint) {
-            if (str_contains($timeline, $hint) || str_contains($message, $hint)) {
+        $timelineLater = false;
+
+        if ($intakeYear !== null) {
+            if ($intakeYear >= $currentYear + 2) {
+                $timelineLater = true;
+                $reasons[] = 'Intake year '.$intakeYear.' is 2+ years ahead';
+            } elseif ($intakeYear <= $currentYear + 1) {
                 $timelineSoon = true;
                 $score += 10;
+                $reasons[] = 'Intake year '.$intakeYear.' is near-term';
+            }
+        }
+
+        foreach ($soonHints as $hint) {
+            if (str_contains($timelineText, $hint) || str_contains($message, $hint)) {
+                // Do not let urgency words override a clearly far intake year.
+                if (! $timelineLater) {
+                    $timelineSoon = true;
+                    $score += 8;
+                }
                 break;
             }
         }
 
-        $timelineLater = false;
         foreach ($laterHints as $hint) {
-            if (str_contains($timeline, $hint) || str_contains($message, $hint)) {
+            if (str_contains($timelineText, $hint) || str_contains($message, $hint)) {
                 $timelineLater = true;
                 break;
+            }
+        }
+
+        // Years mentioned in free text (e.g. "2030") when intake_year field is missing.
+        if ($intakeYear === null && preg_match_all('/\b(20\d{2})\b/', $timelineText.' '.$message, $yearMatches)) {
+            $years = array_map('intval', $yearMatches[1]);
+            $farthest = max($years);
+            if ($farthest >= $currentYear + 2) {
+                $timelineLater = true;
+                $timelineSoon = false;
+                $reasons[] = 'Mentioned intake around '.$farthest;
             }
         }
 
@@ -194,7 +236,7 @@ class LeadClassifierService
         if ($score < 35 || in_array('Spam-like content', $reasons, true)) {
             $classification = LeadClassification::Ignore;
             $reasons[] = 'Low quality or likely not a real prospect';
-        } elseif ($timelineLater && ! $timelineSoon) {
+        } elseif ($timelineLater) {
             $classification = LeadClassification::Future;
             $reasons[] = 'Timeline looks longer-term';
         } elseif ($score >= 65 && ($timelineSoon || ($program !== '' && $country !== '' && $services !== []))) {
@@ -209,7 +251,17 @@ class LeadClassifierService
             'classification' => $classification,
             'score' => $score,
             'reason' => implode('. ', array_unique($reasons)).'.',
-            'model' => 'heuristic-v1',
+            'model' => 'heuristic-v2',
         ];
+    }
+
+    private function intakeYearValue(Lead $lead): ?int
+    {
+        $raw = trim((string) $lead->intake_year);
+        if ($raw === '' || ! preg_match('/^(20\d{2})$/', $raw, $matches)) {
+            return null;
+        }
+
+        return (int) $matches[1];
     }
 }
