@@ -28,6 +28,11 @@ class DepartmentNotificationTest extends TestCase
         $student = User::factory()->student()->create(['name' => 'Sara']);
         $finance = $this->makeStaff('finance@example.com', StaffDepartment::Finance);
         $visa = $this->makeStaff('visa@example.com', StaffDepartment::Visa);
+        $admin = User::factory()->create(['email' => 'admin@example.com']);
+        $admin->assignRole(Role::Admin);
+        $admin->syncPermissions(
+            collect(\App\Enums\Permission::assignableBySuperAdmin())->map->value->all(),
+        );
 
         app(StudentNotificationService::class)->notifyDepartment(
             StaffDepartment::Finance,
@@ -44,6 +49,39 @@ class DepartmentNotificationTest extends TestCase
             ->assertJsonPath('data.0.message', 'Sara uploaded a payment slip.');
 
         Sanctum::actingAs($visa);
+        $this->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 0)
+            ->assertJsonCount(0, 'data');
+
+        Sanctum::actingAs($admin->fresh());
+        $this->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 0)
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_document_upload_notifies_student_info_not_universities(): void
+    {
+        $studentInfo = $this->makeStaff('info@example.com', StaffDepartment::StudentInfo);
+        $universities = $this->makeStaff('unis@example.com', StaffDepartment::Universities);
+        $student = User::factory()->student()->create(['name' => 'Sara']);
+
+        app(StudentNotificationService::class)->notifyDepartment(
+            StaffDepartment::StudentInfo,
+            $student,
+            'Sara uploaded a document for review: Passport.',
+            'document_uploaded',
+            '/departments/documents',
+        );
+
+        Sanctum::actingAs($studentInfo);
+        $this->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 1)
+            ->assertJsonPath('data.0.message', 'Sara uploaded a document for review: Passport.');
+
+        Sanctum::actingAs($universities);
         $this->getJson('/api/notifications')
             ->assertOk()
             ->assertJsonPath('unread_count', 0)

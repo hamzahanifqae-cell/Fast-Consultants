@@ -15,6 +15,11 @@ function areDocumentsJourneyComplete(status: ApplicationStatusResponse | undefin
   if (!status?.checklist?.documents?.accepted) return false;
   const urgentDocs = status.checklist.urgent_documents;
   if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) return false;
+  return true;
+}
+
+function areUniversitiesJourneyComplete(status: ApplicationStatusResponse | undefined): boolean {
+  if (!status?.handoff?.universities_shared) return false;
   const universityDocs = status.checklist.university_documents;
   if (!universityDocs || universityDocs.required === 0) return true;
   return universityDocs.complete;
@@ -61,6 +66,7 @@ function overallStatusProgress(
   const steps = [
     profileDone,
     areDocumentsJourneyComplete(status),
+    areUniversitiesJourneyComplete(status),
     Boolean(status.checklist?.charge_receipts?.accepted),
     Boolean(status.application?.preparation?.completed_at),
     status.application?.interview?.status === 'completed' ||
@@ -78,11 +84,11 @@ function overallStatusProgress(
     return {
       percent: 100,
       title: 'Application complete',
-      description: 'Personal info, documents, fees, interview, and visa are all finished.',
+      description: 'Personal info, documents, universities, fees, interview, and visa are all finished.',
     };
   }
 
-  if (steps[4] && !steps[5]) {
+  if (steps[5] && !steps[6]) {
     return {
       percent,
       title: 'File Making stage in progress',
@@ -108,6 +114,7 @@ function buildJourneySteps(
 
   const profileDone = isProfileComplete(profile);
   const docsDone = areDocumentsJourneyComplete(status);
+  const universitiesDone = areUniversitiesJourneyComplete(status);
   const feesDone = Boolean(status.checklist?.charge_receipts?.accepted);
   const prepDone = Boolean(status.application?.preparation?.completed_at);
   const interviewDone =
@@ -118,7 +125,7 @@ function buildJourneySteps(
       status.application?.interview?.followup_preference === 'decline_another');
   const visaDone = appointments.some((a) => a.status === 'completed');
 
-  const flags = [profileDone, docsDone, feesDone, prepDone, interviewDone, visaDone];
+  const flags = [profileDone, docsDone, universitiesDone, feesDone, prepDone, interviewDone, visaDone];
   const firstOpen = flags.findIndex((done) => !done);
 
   function stateFor(index: number): JourneyState {
@@ -142,11 +149,7 @@ function buildJourneySteps(
         ? urgentDocs.action_needed > 0
           ? `${urgentDocs.action_needed} urgent document${urgentDocs.action_needed === 1 ? '' : 's'} needed`
           : `${urgentDocs.pending} urgent document${urgentDocs.pending === 1 ? '' : 's'} in review`
-        : universityDocs && universityDocs.required > 0 && docs?.accepted && !universityDocs.complete
-          ? universityDocs.action_needed > 0
-            ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
-            : `${universityDocs.pending} university document${universityDocs.pending === 1 ? '' : 's'} in review`
-          : `${docs?.approved ?? 0} approved · ${docs?.pending ?? 0} pending review`;
+        : `${docs?.approved ?? 0} approved · ${docs?.pending ?? 0} pending review`;
 
   return [
     {
@@ -171,14 +174,36 @@ function buildJourneySteps(
       actionLabel: docsDone ? 'View' : 'Open',
     },
     {
+      id: 'universities',
+      label: 'Universities',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : !docsDone
+          ? 'Complete documents first'
+          : universitiesDone
+            ? universityDocs && universityDocs.required > 0
+              ? 'University options shared and required documents done'
+              : 'University options shared'
+            : status.handoff?.universities_shared
+              ? universityDocs && universityDocs.action_needed > 0
+                ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
+                : `${universityDocs?.pending ?? 0} university document${(universityDocs?.pending ?? 0) === 1 ? '' : 's'} in review`
+              : 'Waiting for universities staff to share options',
+      state: !profileDone || !docsDone ? 'locked' : stateFor(2),
+      href: StudentRoutes.universities,
+      actionLabel: universitiesDone ? 'View' : 'Open',
+    },
+    {
       id: 'fees',
       label: 'Charge receipts',
       detail: !profileDone
         ? 'Complete student info first'
-        : feesDone
-          ? 'All fee slips cleared'
-          : `${fees?.approved ?? 0} approved · ${fees?.pending ?? 0} awaiting action`,
-      state: !profileDone ? 'locked' : stateFor(2),
+        : !universitiesDone
+          ? 'Waiting for university options first'
+          : feesDone
+            ? 'All fee slips cleared'
+            : `${fees?.approved ?? 0} approved · ${fees?.pending ?? 0} awaiting action`,
+      state: !profileDone || !universitiesDone ? 'locked' : stateFor(3),
       href: StudentRoutes.chargeReceipts,
       actionLabel: feesDone ? 'View' : 'Open',
     },
@@ -196,7 +221,7 @@ function buildJourneySteps(
         ? 'locked'
         : prepDone
           ? 'complete'
-          : stateFor(3),
+          : stateFor(4),
       href: status.preparation_available ? StudentRoutes.interview : undefined,
       actionLabel: prepDone ? 'View' : 'Open',
     },
@@ -216,7 +241,7 @@ function buildJourneySteps(
         ? 'locked'
         : interviewDone
           ? 'complete'
-          : stateFor(4),
+          : stateFor(5),
       href: status.interview_available ? StudentRoutes.interview : undefined,
       actionLabel: 'Open',
     },
@@ -230,7 +255,7 @@ function buildJourneySteps(
           : appointments.some((a) => a.status === 'scheduled')
             ? 'Appointment scheduled — see details below'
             : 'File Making staff will book after interview',
-      state: !profileDone ? 'locked' : stateFor(5),
+      state: !profileDone ? 'locked' : stateFor(6),
       href: StudentRoutes.visaAppointments,
       actionLabel: appointments.length ? 'View' : undefined,
     },

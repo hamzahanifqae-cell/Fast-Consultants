@@ -63,8 +63,8 @@ class StudentDocumentController extends Controller
         ]);
 
         $studentName = $request->user()->name;
-        $this->notifications->notifyDepartments(
-            [StaffDepartment::StudentInfo, StaffDepartment::Universities],
+        $this->notifications->notifyDepartment(
+            StaffDepartment::StudentInfo,
             $request->user(),
             "{$studentName} uploaded a document for review: {$document->title}.",
             'document_uploaded',
@@ -122,8 +122,8 @@ class StudentDocumentController extends Controller
         $document->update($attributes);
 
         $studentName = $request->user()->name;
-        $this->notifications->notifyDepartments(
-            [StaffDepartment::StudentInfo, StaffDepartment::Universities],
+        $this->notifications->notifyDepartment(
+            StaffDepartment::StudentInfo,
             $request->user(),
             "{$studentName} updated a document for review: {$document->title}.",
             'document_uploaded',

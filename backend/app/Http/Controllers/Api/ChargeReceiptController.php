@@ -90,6 +90,14 @@ class ChargeReceiptController extends Controller
 
         $receipt->load(['student:id,name,email', 'consultant:id,name,email']);
 
+        $this->notifications->createForStudent(
+            $receipt->student,
+            $request->user(),
+            'A finance slip "'.$receipt->title.'" was shared with you. Open Charge receipts to pay and upload proof.',
+            'charge_receipt_issued',
+            '/student-charge-receipts',
+        );
+
         $this->handoffs->syncFees($receipt->student, $request->user());
 
         return ChargeReceiptResource::make($receipt)

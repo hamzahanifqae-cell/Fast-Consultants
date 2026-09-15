@@ -601,7 +601,19 @@ class ChatController extends Controller
                 'student.studentProfile:id,user_id,phone',
             ]);
             $phone = $conversation->student?->studentProfile?->phone;
+            abort_if(
+                ! filled($phone),
+                422,
+                'This student has no phone number yet. Ask them to add WhatsApp/phone under Personal info before sending WhatsApp.',
+            );
         }
+
+        $normalized = $this->whatsapp->normalizePhone((string) $phone);
+        abort_if(
+            $normalized === null,
+            422,
+            'This phone number looks invalid for WhatsApp. Update it under Personal info (include country code, e.g. +92…).',
+        );
 
         $mediaContents = null;
         $mediaMime = null;
@@ -657,6 +669,8 @@ class ChatController extends Controller
                     'sent' => true,
                     'mode' => $whatsappResult['mode'],
                     'provider_message_id' => $whatsappResult['provider_message_id'],
+                    'to' => $whatsappResult['to'] ?? $normalized,
+                    'from' => $this->whatsapp->businessDisplayNumber(),
                 ],
             ],
         ], 201);

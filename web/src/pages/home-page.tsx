@@ -173,6 +173,15 @@ function currentStudentStep(
     };
   }
 
+  if (!status.handoff?.universities_shared) {
+    return {
+      title: 'Waiting for university options',
+      body: 'Documents are approved. Universities staff will share options with you next.',
+      to: StudentRoutes.universities,
+      label: 'View universities',
+    };
+  }
+
   const universityDocs = status.checklist?.university_documents;
   if (universityDocs && universityDocs.required > 0 && !universityDocs.complete) {
     const missingNames = universityDocs.missing
@@ -365,12 +374,20 @@ function studentProgressSteps(
       done: Boolean(
         status?.checklist?.documents?.accepted &&
           (!status.checklist.urgent_documents ||
-            status.checklist.urgent_documents.complete) &&
-          (!status.checklist.university_documents ||
+            status.checklist.urgent_documents.complete),
+      ),
+      color: '#60a5fa',
+    },
+    {
+      id: 'universities',
+      label: 'Universities',
+      done: Boolean(
+        status?.handoff?.universities_shared &&
+          (!status.checklist?.university_documents ||
             status.checklist.university_documents.required === 0 ||
             status.checklist.university_documents.complete),
       ),
-      color: '#60a5fa',
+      color: '#a78bfa',
     },
     {
       id: 'fees',

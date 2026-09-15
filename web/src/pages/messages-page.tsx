@@ -467,12 +467,12 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         data: {
           conversation: ChatConversation;
           message: ChatMessage;
-          whatsapp: { sent: boolean; mode: string };
+          whatsapp: { sent: boolean; mode: string; to?: string; from?: string | null };
         };
       }>(`/chat/conversations/${activeId}/whatsapp`, formData);
       return data.data;
     },
-    onSuccess: async () => {
+    onSuccess: async (payload) => {
       setDraft('');
       setAttachmentFile(null);
       setScheduleAt('');
@@ -481,7 +481,11 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         attachmentInputRef.current.value = '';
       }
       setError(null);
-      setBroadcastNotice('Sent in chat and on WhatsApp.');
+      const to = payload.whatsapp?.to ? `+${payload.whatsapp.to}` : 'the student phone';
+      const from = payload.whatsapp?.from ? ` from ${payload.whatsapp.from}` : '';
+      setBroadcastNotice(
+        `WhatsApp accepted text to ${to}${from}. On the phone, open the chat with that business number (not a personal contact). If nothing appears, send any message to the business number first, then retry.`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -734,7 +738,9 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     Boolean(activeId) &&
     !studentComposerLocked &&
     !scheduleAt &&
-    (draft.trim().length > 0 || Boolean(attachmentFile));
+    (draft.trim().length > 0 || Boolean(attachmentFile)) &&
+    (activeConversation?.kind !== 'student_department' ||
+      Boolean(activeConversation?.other_user?.phone));
 
   function onSendWhatsApp() {
     if (!canSendWhatsApp) return;
@@ -1468,7 +1474,20 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
               ) : (
                 <>
               <div className="chat-thread-header">
-                <span>{threadTitle}</span>
+                <div className="chat-thread-title-block">
+                  <span>{threadTitle}</span>
+                  {isConsultant && activeConversation?.other_user?.phone ? (
+                    <small className="chat-thread-phone">
+                      WhatsApp → {activeConversation.other_user.phone}
+                    </small>
+                  ) : isConsultant &&
+                    activeConversation?.kind === 'student_department' &&
+                    !activeConversation?.other_user?.phone ? (
+                    <small className="chat-thread-phone warn">
+                      No phone on Personal info — WhatsApp disabled
+                    </small>
+                  ) : null}
+                </div>
                 <div className="chat-thread-header-actions">
                   {isConsultant && activeId ? (
                     <div
@@ -1598,7 +1617,10 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       title={
                         scheduleAt
                           ? 'Clear schedule to use WhatsApp'
-                          : 'Send text/file in chat and on WhatsApp'
+                          : activeConversation?.kind === 'student_department' &&
+                              !activeConversation?.other_user?.phone
+                            ? 'Student must add a phone number in Personal info first'
+                            : 'Send text/file in chat and on WhatsApp'
                       }
                       disabled={!canSendWhatsApp || sendMessage.isPending || sendWhatsApp.isPending}
                       onClick={onSendWhatsApp}>

@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Models\ChargeReceipt;
 use App\Models\ChatConversation;
 use App\Models\ChatStudentBlock;
+use App\Models\Lead;
 use App\Models\Question;
 use App\Models\StudentApplication;
 use App\Models\StudentDocument;
@@ -79,7 +80,10 @@ class ClearStudentDataCommand extends Command
             ChargeReceipt::query()->delete();
             StudentDocument::query()->delete();
             StudentProfile::query()->delete();
+            Lead::query()->delete();
             DB::table('student_university')->delete();
+            DB::table('jobs')->delete();
+            DB::table('failed_jobs')->delete();
 
             foreach ($students as $student) {
                 PersonalAccessToken::query()

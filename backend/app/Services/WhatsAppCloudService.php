@@ -16,6 +16,39 @@ class WhatsAppCloudService
     }
 
     /**
+     * Business / test WhatsApp number shown on Meta (e.g. +1 555-200-9488).
+     */
+    public function businessDisplayNumber(): ?string
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        $version = (string) config('services.whatsapp.api_version', 'v25.0');
+        $phoneNumberId = (string) config('services.whatsapp.phone_number_id');
+        $token = (string) config('services.whatsapp.token');
+
+        try {
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(10)
+                ->get("https://graph.facebook.com/{$version}/{$phoneNumberId}", [
+                    'fields' => 'display_phone_number',
+                ]);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $display = $response->json('display_phone_number');
+
+            return is_string($display) && $display !== '' ? $display : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Normalize a stored phone into WhatsApp digits (country code, no +).
      */
     public function normalizePhone(?string $phone): ?string
@@ -34,11 +67,31 @@ class WhatsAppCloudService
         }
 
         $defaultCountry = (string) config('services.whatsapp.default_country_code', '92');
+
+        // Local numbers with a leading trunk 0 (e.g. 0300… → 92300…).
         if (str_starts_with($digits, '0') && strlen($digits) >= 10 && strlen($digits) <= 11) {
             $digits = $defaultCountry.substr($digits, 1);
         }
 
-        return strlen($digits) >= 8 ? $digits : null;
+        // Common Pakistan mobiles stored without 0 or country code (e.g. 3001234567).
+        if (
+            $defaultCountry === '92'
+            && strlen($digits) === 10
+            && str_starts_with($digits, '3')
+        ) {
+            $digits = $defaultCountry.$digits;
+        }
+
+        // Same pattern for other default countries: national length 10 without country prefix.
+        if (
+            $defaultCountry !== '92'
+            && strlen($digits) === 10
+            && ! str_starts_with($digits, $defaultCountry)
+        ) {
+            $digits = $defaultCountry.$digits;
+        }
+
+        return strlen($digits) >= 10 && strlen($digits) <= 15 ? $digits : null;
     }
 
     /**
@@ -82,8 +135,9 @@ class WhatsAppCloudService
             return $result;
         }
 
-        $preferTemplate = filled(config('services.whatsapp.template_name'))
-            || filter_var(config('services.whatsapp.prefer_template', false), FILTER_VALIDATE_BOOLEAN);
+        // Only force templates when explicitly enabled. Template name alone is for
+        // optional outside-window fallback of approved body templates — never hello_world.
+        $preferTemplate = filter_var(config('services.whatsapp.prefer_template', false), FILTER_VALIDATE_BOOLEAN);
 
         if ($preferTemplate) {
             $result = $this->sendTemplateMessage($to, $trimmed);
@@ -110,7 +164,11 @@ class WhatsAppCloudService
                 'to' => $to,
             ];
         } catch (RuntimeException $exception) {
-            if ($this->shouldFallbackToTemplate($exception) && filled(config('services.whatsapp.template_name'))) {
+            if ($this->isAuthenticationError($exception)) {
+                throw $exception;
+            }
+
+            if ($this->shouldFallbackToTemplate($exception)) {
                 $result = $this->sendTemplateMessage($to, $trimmed);
                 $result['to'] = $to;
 
@@ -118,10 +176,11 @@ class WhatsAppCloudService
             }
 
             if ($this->isOutsideCustomerCareWindow($exception)) {
+                $business = $this->businessDisplayNumber() ?? $this->businessNumberHint();
                 throw new RuntimeException(
-                    'WhatsApp text messages only work for 24 hours after the student messages your WhatsApp Business/test number. '
-                    .'Ask them to send any message to that number first, or set WHATSAPP_TEMPLATE_NAME for template sends. '
-                    .'Original error: '.$exception->getMessage(),
+                    "WhatsApp can only deliver the staff’s exact text for 24 hours after the student messages your business number ({$business}). "
+                    .'On the student phone, open WhatsApp → send any message to that business number → then retry WhatsApp from the project. '
+                    .'Meta’s dashboard “Hello World” template can arrive without this step; free-form staff text cannot.',
                     previous: $exception,
                 );
             }
@@ -188,14 +247,7 @@ class WhatsAppCloudService
                 ])
                 ->throw();
         } catch (RequestException $exception) {
-            $json = $exception->response?->json();
-            $error = data_get($json, 'error.message')
-                ?? data_get($json, 'error.error_user_msg')
-                ?? $exception->getMessage();
-            $code = data_get($json, 'error.code');
-            $prefix = $code ? "WhatsApp media upload error (#{$code}): " : 'WhatsApp media upload error: ';
-
-            throw new RuntimeException($prefix.$error, previous: $exception);
+            $this->throwFromWhatsAppException($exception, 'WhatsApp media upload error');
         }
 
         $mediaId = data_get($response->json(), 'id');
@@ -295,20 +347,51 @@ class WhatsAppCloudService
 
     private function shouldFallbackToTemplate(RuntimeException $exception): bool
     {
-        return $this->isOutsideCustomerCareWindow($exception)
-            || str_contains(strtolower($exception->getMessage()), 'template');
+        if ($this->isAuthenticationError($exception)) {
+            return false;
+        }
+
+        $template = strtolower(trim((string) config('services.whatsapp.template_name', '')));
+        // hello_world cannot carry the staff message — never use it as a silent fallback.
+        if ($template === '' || $template === 'hello_world') {
+            return false;
+        }
+
+        return $this->isOutsideCustomerCareWindow($exception);
+    }
+
+    private function businessNumberHint(): string
+    {
+        $id = trim((string) config('services.whatsapp.phone_number_id', ''));
+
+        return $id !== '' ? 'the number linked to phone ID '.$id : 'your Meta test/business number';
+    }
+
+    private function isAuthenticationError(RuntimeException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, '(#190)')
+            || str_contains($message, 'whatsapp login expired')
+            || str_contains($message, 'oauthexception')
+            || (str_contains($message, 'authentication') && str_contains($message, 'error'));
     }
 
     private function isOutsideCustomerCareWindow(RuntimeException $exception): bool
     {
+        if ($this->isAuthenticationError($exception)) {
+            return false;
+        }
+
         $message = strtolower($exception->getMessage());
 
-        return str_contains($message, '24')
-            || str_contains($message, 're-engagement')
-            || str_contains($message, '131047')
+        return str_contains($message, '131047')
             || str_contains($message, '130472')
+            || str_contains($message, 're-engagement')
             || str_contains($message, 'customer care')
-            || str_contains($message, 'session');
+            || str_contains($message, 'outside the allowed window')
+            || str_contains($message, 'more than 24 hours')
+            || str_contains($message, '24-hour');
     }
 
     /**
@@ -329,20 +412,32 @@ class WhatsAppCloudService
                 ->post("https://graph.facebook.com/{$version}/{$phoneNumberId}/messages", $payload)
                 ->throw();
         } catch (RequestException $exception) {
-            $json = $exception->response?->json();
-            $error = data_get($json, 'error.message')
-                ?? data_get($json, 'error.error_user_msg')
-                ?? $exception->getMessage();
-            $code = data_get($json, 'error.code');
-
-            $prefix = $code ? "WhatsApp API error (#{$code}): " : 'WhatsApp API error: ';
-
-            throw new RuntimeException($prefix.$error, previous: $exception);
+            $this->throwFromWhatsAppException($exception, 'WhatsApp API error');
         }
 
         /** @var array<string, mixed> $json */
         $json = $response->json() ?? [];
 
         return $json;
+    }
+
+    private function throwFromWhatsAppException(RequestException $exception, string $label): never
+    {
+        $json = $exception->response?->json();
+        $error = data_get($json, 'error.message')
+            ?? data_get($json, 'error.error_user_msg')
+            ?? $exception->getMessage();
+        $code = data_get($json, 'error.code');
+
+        if ((int) $code === 190) {
+            throw new RuntimeException(
+                'WhatsApp login expired. In Meta Developer → WhatsApp → API Setup, create a new permanent access token (System User), set WHATSAPP_TOKEN on the API server, then redeploy or restart. Temporary tokens expire quickly.',
+                previous: $exception,
+            );
+        }
+
+        $prefix = $code ? "{$label} (#{$code}): " : "{$label}: ";
+
+        throw new RuntimeException($prefix.$error, previous: $exception);
     }
 }

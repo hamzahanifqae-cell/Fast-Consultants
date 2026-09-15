@@ -47,7 +47,8 @@ class StudentNotificationService
     }
 
     /**
-     * Notify organization users who can access this department (Super Admin, Admin, Staff).
+     * Notify staff assigned to this department only (matched by staff_department).
+     * Super Admin / Admin are not included in department fan-out.
      */
     public function notifyDepartment(
         StaffDepartment $department,
@@ -108,12 +109,11 @@ class StudentNotificationService
             ->when($exceptUserId, fn (Builder $query) => $query->where('id', '!=', $exceptUserId))
             ->whereHas('roles', function (Builder $roles) {
                 $roles->whereIn('name', [
-                    Role::SuperAdmin->value,
-                    Role::Admin->value,
                     Role::Staff->value,
                     Role::Consultant->value,
                 ]);
             })
+            ->where('staff_department', $department->value)
             ->get()
             ->filter(fn (User $user) => $user->canAccessDepartment($department))
             ->values()

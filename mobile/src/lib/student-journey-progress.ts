@@ -105,6 +105,11 @@ export function areDocumentsJourneyComplete(status: ApplicationStatusResponse | 
   if (!status?.checklist.documents.accepted) return false;
   const urgentDocs = status.checklist.urgent_documents;
   if (urgentDocs && urgentDocs.required > 0 && !urgentDocs.complete) return false;
+  return true;
+}
+
+export function areUniversitiesJourneyComplete(status: ApplicationStatusResponse | undefined): boolean {
+  if (!status?.handoff?.universities_shared) return false;
   const universityDocs = status.checklist.university_documents;
   if (!universityDocs || universityDocs.required === 0) return true;
   return universityDocs.complete;
@@ -127,6 +132,7 @@ export function overallStatusSummary(
   const steps = [
     profileDone,
     areDocumentsJourneyComplete(status),
+    areUniversitiesJourneyComplete(status),
     Boolean(status.checklist.charge_receipts.accepted),
     Boolean(status.application.preparation.completed_at),
     isInterviewJourneyComplete(status.application.interview),
@@ -140,11 +146,11 @@ export function overallStatusSummary(
     return {
       percent: 100,
       title: 'Application complete',
-      description: 'Personal info, documents, fees, interview, and visa are all finished.',
+      description: 'Personal info, documents, universities, fees, interview, and visa are all finished.',
     };
   }
 
-  if (steps[4] && !steps[5]) {
+  if (steps[5] && !steps[6]) {
     return {
       percent,
       title: 'File Making stage in progress',
@@ -170,12 +176,13 @@ export function buildStatusJourneySteps(
 
   const profileDone = isProfileComplete(profile);
   const docsDone = areDocumentsJourneyComplete(status);
+  const universitiesDone = areUniversitiesJourneyComplete(status);
   const feesDone = Boolean(status.checklist.charge_receipts.accepted);
   const prepDone = Boolean(status.application.preparation.completed_at);
   const interviewDone = isInterviewJourneyComplete(status.application.interview);
   const visaDone = isVisaJourneyComplete(appointments);
 
-  const flags = [profileDone, docsDone, feesDone, prepDone, interviewDone, visaDone];
+  const flags = [profileDone, docsDone, universitiesDone, feesDone, prepDone, interviewDone, visaDone];
   const firstOpen = flags.findIndex((done) => !done);
 
   function stateFor(index: number): StatusJourneyState {
@@ -199,11 +206,7 @@ export function buildStatusJourneySteps(
         ? urgentDocs.action_needed > 0
           ? `${urgentDocs.action_needed} urgent document${urgentDocs.action_needed === 1 ? '' : 's'} needed`
           : `${urgentDocs.pending} urgent document${urgentDocs.pending === 1 ? '' : 's'} in review`
-        : universityDocs && universityDocs.required > 0 && docs.accepted && !universityDocs.complete
-          ? universityDocs.action_needed > 0
-            ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
-            : `${universityDocs.pending} university document${universityDocs.pending === 1 ? '' : 's'} in review`
-          : `${docs.approved} approved · ${docs.pending} pending review`;
+        : `${docs.approved} approved · ${docs.pending} pending review`;
 
   return [
     {
@@ -228,14 +231,36 @@ export function buildStatusJourneySteps(
       actionLabel: docsDone ? 'View' : 'Open',
     },
     {
+      id: 'universities',
+      label: 'Universities',
+      detail: !profileDone
+        ? 'Complete student info first'
+        : !docsDone
+          ? 'Complete documents first'
+          : universitiesDone
+            ? universityDocs && universityDocs.required > 0
+              ? 'University options shared and required documents done'
+              : 'University options shared'
+            : status.handoff.universities_shared
+              ? universityDocs && universityDocs.action_needed > 0
+                ? `${universityDocs.action_needed} university document${universityDocs.action_needed === 1 ? '' : 's'} still needed`
+                : `${universityDocs?.pending ?? 0} university document${(universityDocs?.pending ?? 0) === 1 ? '' : 's'} in review`
+              : 'Waiting for universities staff to share options',
+      state: !profileDone || !docsDone ? 'locked' : stateFor(2),
+      href: '/student-universities',
+      actionLabel: universitiesDone ? 'View' : 'Open',
+    },
+    {
       id: 'fees',
       label: 'Charge receipts',
       detail: !profileDone
         ? 'Complete student info first'
-        : feesDone
-          ? 'All fee slips cleared'
-          : `${fees.approved} approved · ${fees.pending} awaiting action`,
-      state: !profileDone ? 'locked' : stateFor(2),
+        : !universitiesDone
+          ? 'Waiting for university options first'
+          : feesDone
+            ? 'All fee slips cleared'
+            : `${fees.approved} approved · ${fees.pending} awaiting action`,
+      state: !profileDone || !universitiesDone ? 'locked' : stateFor(3),
       href: '/student-charge-receipts',
       actionLabel: feesDone ? 'View' : 'Open',
     },
@@ -253,7 +278,7 @@ export function buildStatusJourneySteps(
         ? 'locked'
         : prepDone
           ? 'complete'
-          : stateFor(3),
+          : stateFor(4),
       href: status.preparation_available ? '/student-interview' : undefined,
       actionLabel: prepDone ? 'View' : 'Open',
     },
@@ -273,7 +298,7 @@ export function buildStatusJourneySteps(
         ? 'locked'
         : interviewDone
           ? 'complete'
-          : stateFor(4),
+          : stateFor(5),
       href: status.interview_available ? '/student-interview' : undefined,
       actionLabel: 'Open',
     },
@@ -287,7 +312,7 @@ export function buildStatusJourneySteps(
           : appointments.some((a) => a.status === 'scheduled')
             ? 'Appointment scheduled — see details below'
             : 'File Making staff will book after interview',
-      state: !profileDone ? 'locked' : stateFor(5),
+      state: !profileDone ? 'locked' : stateFor(6),
       href: '/student-visa-appointments',
       actionLabel: appointments.length ? 'View' : undefined,
     },
@@ -316,6 +341,17 @@ export function studentProgressSteps(
           : 'Documents',
       done: areDocumentsJourneyComplete(status),
       color: '#60a5fa',
+    },
+    {
+      id: 'universities',
+      label: 'Universities',
+      done: Boolean(
+        status?.handoff?.universities_shared &&
+          (!status.checklist.university_documents ||
+            status.checklist.university_documents.required === 0 ||
+            status.checklist.university_documents.complete),
+      ),
+      color: '#a78bfa',
     },
     {
       id: 'fees',
@@ -432,6 +468,15 @@ export function currentStudentStep(
       body: 'Staff are checking your uploads. This step stays active until every file is approved.',
       href: '/student-documents',
       label: 'View documents',
+    };
+  }
+
+  if (!status.handoff?.universities_shared) {
+    return {
+      title: 'Waiting for university options',
+      body: 'Documents are approved. Universities staff will share options with you next.',
+      href: '/student-universities',
+      label: 'View universities',
     };
   }
 
