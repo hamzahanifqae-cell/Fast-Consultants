@@ -3994,10 +3994,10 @@ button.university-doc-chip:disabled {
 
 .leads-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   max-height: min(72vh, 820px);
   overflow: auto;
-  padding-right: 2px;
+  padding: 2px;
 }
 
 .leads-list-item {
@@ -4013,12 +4013,24 @@ button.university-doc-chip:disabled {
   padding: 12px;
   cursor: pointer;
   color: inherit;
+  transform: none;
+  box-shadow: none;
+  isolation: isolate;
 }
 
-.leads-list-item:hover,
-.leads-list-item.active {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+.leads-list-item:hover {
+  transform: none;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--panel-muted) 88%, var(--panel));
+  box-shadow: none;
+}
+
+.leads-list-item.active,
+.leads-list-item.active:hover {
+  transform: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .leads-avatar {

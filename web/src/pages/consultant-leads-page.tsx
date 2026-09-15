@@ -166,6 +166,23 @@ export function ConsultantLeadsPage() {
     onError: (err) => setError(getApiErrorMessage(err, 'Could not dismiss lead.')),
   });
 
+  const clearCredentials = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error('Select a lead.');
+      const { data } = await api.post<{ data: Lead }>(
+        `/consultant/leads/${selected.id}/clear-credentials`,
+      );
+      return data.data;
+    },
+    onSuccess: async (lead) => {
+      setError(null);
+      setCreatedCredentials(null);
+      setSelectedId(lead.id);
+      await queryClient.invalidateQueries({ queryKey: ['consultant-leads'] });
+    },
+    onError: (err) => setError(getApiErrorMessage(err, 'Could not clear student credentials.')),
+  });
+
   function selectLead(lead: Lead) {
     setSelectedId(lead.id);
     setCreatedCredentials(null);
@@ -181,10 +198,6 @@ export function ConsultantLeadsPage() {
             <p className="leads-kicker">Admissions intake</p>
             <h2>Review enquiry forms and issue student access</h2>
           </div>
-          <p className="leads-page-copy">
-            Public applications from <code>/apply</code> land here. Check the model assessment, then
-            create login credentials or dismiss the lead.
-          </p>
         </header>
 
         <div className="leads-workspace">
@@ -378,6 +391,25 @@ export function ConsultantLeadsPage() {
                   <div className="leads-notice success">
                     Student account already exists for <strong>{selected.converted_user.email}</strong>.
                     They can sign in at <code>/student/login</code>.
+                    {canManage ? (
+                      <div className="leads-action-buttons" style={{ marginTop: 12 }}>
+                        <button
+                          type="button"
+                          className="ghost-btn danger"
+                          disabled={clearCredentials.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Clear credentials for ${selected.converted_user?.email}? The student account will be deleted.`,
+                              )
+                            ) {
+                              clearCredentials.mutate();
+                            }
+                          }}>
+                          {clearCredentials.isPending ? 'Clearing…' : 'Clear student credentials'}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

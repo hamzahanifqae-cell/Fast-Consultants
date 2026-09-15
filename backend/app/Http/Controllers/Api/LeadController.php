@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class LeadController extends Controller
 {
@@ -167,6 +168,46 @@ class LeadController extends Controller
         ])->save();
 
         return response()->json(['data' => $this->payload($lead)]);
+    }
+
+    public function clearCredentials(Request $request, Lead $lead): JsonResponse
+    {
+        $this->ensureCanManage($request);
+
+        if ($lead->status !== LeadStatus::Converted || ! $lead->converted_user_id) {
+            throw ValidationException::withMessages([
+                'lead' => ['This lead has no student credentials to clear.'],
+            ]);
+        }
+
+        $studentId = (int) $lead->converted_user_id;
+
+        DB::transaction(function () use ($lead, $studentId): void {
+            $student = User::query()->find($studentId);
+            if ($student && $student->hasRole(Role::Student)) {
+                PersonalAccessToken::query()
+                    ->where('tokenable_type', User::class)
+                    ->where('tokenable_id', $student->id)
+                    ->delete();
+                $student->delete();
+            }
+
+            $nextStatus = $lead->classified_at
+                ? LeadStatus::Classified
+                : LeadStatus::New;
+
+            $lead->forceFill([
+                'status' => $nextStatus,
+                'converted_user_id' => null,
+                'converted_by' => null,
+                'converted_at' => null,
+            ])->save();
+        });
+
+        return response()->json([
+            'data' => $this->payload($lead->fresh()->load('convertedUser:id,name,email')),
+            'message' => 'Student credentials cleared.',
+        ]);
     }
 
     private function ensureCanView(Request $request): void

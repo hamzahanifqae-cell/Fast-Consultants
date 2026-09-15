@@ -139,6 +139,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/consultant/leads/{lead}', [LeadController::class, 'show']);
         Route::post('/consultant/leads/{lead}/convert', [LeadController::class, 'convert']);
         Route::post('/consultant/leads/{lead}/dismiss', [LeadController::class, 'dismiss']);
+        Route::post('/consultant/leads/{lead}/clear-credentials', [LeadController::class, 'clearCredentials']);
 
         Route::get('/consultant/universities', [UniversityController::class, 'consultantIndex']);
         Route::post('/consultant/universities', [UniversityController::class, 'store']);
