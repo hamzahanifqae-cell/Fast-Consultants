@@ -250,6 +250,9 @@ class StudentApplicationController extends Controller
             $request->user()->name.' marked preparation as complete.',
             'preparation_completed',
             '/departments/interview',
+            null,
+            'preparation:'.$request->user()->id,
+            true,
         );
 
         $payload = $this->applications->statusPayload($application->fresh());
@@ -307,6 +310,9 @@ class StudentApplicationController extends Controller
                 $request->user()->name.' wants another interview meeting. Please schedule the next session.',
                 'interview_followup_requested',
                 '/departments/interview',
+                null,
+                'interview_followup:'.$request->user()->id,
+                true,
             );
         } else {
             $this->notifications->notifyDepartments(
@@ -315,6 +321,9 @@ class StudentApplicationController extends Controller
                 $request->user()->name.' does not want another interview meeting right now.',
                 'interview_followup_declined',
                 '/departments/interview',
+                null,
+                'interview_followup:'.$request->user()->id,
+                true,
             );
         }
 

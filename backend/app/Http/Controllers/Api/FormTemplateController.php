@@ -134,6 +134,9 @@ class FormTemplateController extends Controller
             $request->user()->name.' submitted a Sponsorship letter for review.',
             'form_template_submitted',
             '/departments/form-templates',
+            null,
+            'form_template:'.$formTemplateAssignment->id,
+            true,
         );
 
         return FormTemplateAssignmentResource::make($formTemplateAssignment);

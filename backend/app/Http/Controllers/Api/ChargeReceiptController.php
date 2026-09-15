@@ -141,6 +141,9 @@ class ChargeReceiptController extends Controller
             $request->user()->name.' uploaded a payment slip for "'.$chargeReceipt->title.'".',
             'charge_receipt_uploaded',
             '/departments/finance',
+            null,
+            'charge:'.$chargeReceipt->id,
+            true,
         );
 
         $this->handoffs->syncFees($request->user(), $request->user());

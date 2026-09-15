@@ -4216,23 +4216,49 @@ button.university-doc-chip:disabled {
   letter-spacing: 0.02em;
   white-space: nowrap;
   background: color-mix(in srgb, var(--muted) 16%, transparent);
-  color: var(--text);
+  color: var(--ink);
 }
 
 .lead-tag.interested {
-  background: color-mix(in srgb, #1f9d62 22%, transparent);
-  color: #9be7bf;
+  background: color-mix(in srgb, #10b981 18%, var(--panel));
+  color: #047857;
+  border: 1px solid color-mix(in srgb, #10b981 28%, transparent);
 }
 
 .lead-tag.future {
-  background: color-mix(in srgb, #d4a017 20%, transparent);
-  color: #f2d48a;
+  background: color-mix(in srgb, #d4a017 18%, var(--panel));
+  color: #92400e;
+  border: 1px solid color-mix(in srgb, #d4a017 28%, transparent);
 }
 
 .lead-tag.ignore,
 .lead-tag.pending {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: color-mix(in srgb, var(--accent) 80%, white);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+html[data-theme='dark'] .lead-tag {
+  color: var(--ink);
+}
+
+html[data-theme='dark'] .lead-tag.interested {
+  background: color-mix(in srgb, #1f9d62 28%, transparent);
+  color: #9be7bf;
+  border-color: color-mix(in srgb, #1f9d62 35%, transparent);
+}
+
+html[data-theme='dark'] .lead-tag.future {
+  background: color-mix(in srgb, #d4a017 24%, transparent);
+  color: #f2d48a;
+  border-color: color-mix(in srgb, #d4a017 32%, transparent);
+}
+
+html[data-theme='dark'] .lead-tag.ignore,
+html[data-theme='dark'] .lead-tag.pending {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: color-mix(in srgb, var(--accent) 70%, white);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .leads-page {

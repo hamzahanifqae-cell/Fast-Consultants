@@ -14,6 +14,7 @@ class UserNotification extends Model
         'conversation_id',
         'type',
         'action',
+        'subject_key',
         'message',
         'read_at',
     ];

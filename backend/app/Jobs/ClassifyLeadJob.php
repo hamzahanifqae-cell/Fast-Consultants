@@ -48,6 +48,9 @@ class ClassifyLeadJob implements ShouldQueue
             "Lead scored as {$label}: {$lead->name} ({$lead->email}). Score {$result['score']}/100.",
             'lead_classified',
             '/departments/leads',
+            null,
+            'lead:'.$lead->id,
+            true,
         );
     }
 

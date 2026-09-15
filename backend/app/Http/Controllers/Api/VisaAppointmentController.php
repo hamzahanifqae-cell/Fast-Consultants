@@ -78,6 +78,9 @@ class VisaAppointmentController extends Controller
             'File Making appointment scheduled for '.$appointment->student->name.'.',
             'visa_appointment_scheduled',
             '/departments/visa',
+            null,
+            'visa_appointment:'.$appointment->id,
+            true,
         );
 
         return VisaAppointmentResource::make($appointment)

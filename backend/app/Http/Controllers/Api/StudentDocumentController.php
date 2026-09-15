@@ -69,6 +69,9 @@ class StudentDocumentController extends Controller
             "{$studentName} uploaded a document for review: {$document->title}.",
             'document_uploaded',
             '/departments/documents',
+            null,
+            'document:'.$document->id,
+            true,
         );
 
         $this->handoffs->syncDocuments($request->user(), $request->user());
@@ -128,6 +131,9 @@ class StudentDocumentController extends Controller
             "{$studentName} updated a document for review: {$document->title}.",
             'document_uploaded',
             '/departments/documents',
+            null,
+            'document:'.$document->id,
+            true,
         );
 
         $this->handoffs->syncDocuments($request->user(), $request->user());

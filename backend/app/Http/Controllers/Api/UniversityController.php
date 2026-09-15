@@ -160,6 +160,9 @@ class UniversityController extends Controller
                 $student->name.' suggested universit'.(count($attach) === 1 ? 'y' : 'ies').': '.$names.'.',
                 'university_suggested',
                 '/departments/universities',
+                null,
+                'university_suggestion:student:'.$student->id,
+                true,
             );
 
             $this->handoffs->syncUniversities($student, $student);

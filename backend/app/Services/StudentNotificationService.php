@@ -17,13 +17,38 @@ class StudentNotificationService
         ?string $type = null,
         ?string $action = null,
         ?int $conversationId = null,
+        ?string $subjectKey = null,
+        bool $replaceSubject = false,
     ): UserNotification {
+        if ($replaceSubject && filled($subjectKey)) {
+            $existing = UserNotification::query()
+                ->where('user_id', $user->id)
+                ->where('subject_key', $subjectKey)
+                ->whereNull('read_at')
+                ->latest('id')
+                ->first();
+
+            if ($existing) {
+                $existing->forceFill([
+                    'actor_id' => $actor?->id,
+                    'conversation_id' => $conversationId,
+                    'type' => $type,
+                    'action' => $action,
+                    'message' => $message,
+                    'created_at' => now(),
+                ])->save();
+
+                return $existing->refresh();
+            }
+        }
+
         return UserNotification::query()->create([
             'user_id' => $user->id,
             'actor_id' => $actor?->id,
             'conversation_id' => $conversationId,
             'type' => $type,
             'action' => $action,
+            'subject_key' => $subjectKey,
             'message' => $message,
         ]);
     }
@@ -35,6 +60,8 @@ class StudentNotificationService
         ?string $type = null,
         ?string $action = null,
         ?int $conversationId = null,
+        ?string $subjectKey = null,
+        bool $replaceSubject = false,
     ): UserNotification {
         return $this->createForUser(
             $student,
@@ -43,6 +70,8 @@ class StudentNotificationService
             $type,
             $action,
             $conversationId,
+            $subjectKey,
+            $replaceSubject,
         );
     }
 
@@ -57,6 +86,8 @@ class StudentNotificationService
         ?string $type = null,
         ?string $action = null,
         ?int $conversationId = null,
+        ?string $subjectKey = null,
+        bool $replaceSubject = false,
     ): void {
         $this->notifyDepartments(
             [$department],
@@ -65,6 +96,8 @@ class StudentNotificationService
             $type,
             $action,
             $conversationId,
+            $subjectKey,
+            $replaceSubject,
         );
     }
 
@@ -78,6 +111,8 @@ class StudentNotificationService
         ?string $type = null,
         ?string $action = null,
         ?int $conversationId = null,
+        ?string $subjectKey = null,
+        bool $replaceSubject = false,
     ): void {
         $seen = [];
 
@@ -95,6 +130,8 @@ class StudentNotificationService
                     $type,
                     $action,
                     $conversationId,
+                    $subjectKey,
+                    $replaceSubject,
                 );
             }
         }

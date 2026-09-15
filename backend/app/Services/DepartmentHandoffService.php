@@ -135,6 +135,9 @@ class DepartmentHandoffService
             $message,
             $type,
             $action,
+            null,
+            'handoff:'.$department->value.':'.$student->id,
+            true,
         );
     }
 }

@@ -104,6 +104,9 @@ class UniversitySuggestionController extends Controller
                 $student->name.' suggested universit'.(count($created) === 1 ? 'y' : 'ies').' in '.$validated['country'].': '.$names.'.',
                 'university_suggested',
                 '/departments/universities',
+                null,
+                'university_suggestion:student:'.$student->id,
+                true,
             );
         }
 

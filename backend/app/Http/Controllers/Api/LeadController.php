@@ -44,6 +44,8 @@ class LeadController extends Controller
             "New lead form from {$lead->name} ({$lead->email}). Classification is running.",
             'lead_submitted',
             '/departments/leads',
+            null,
+            'lead:'.$lead->id,
         );
 
         ClassifyLeadJob::dispatch($lead->id);
