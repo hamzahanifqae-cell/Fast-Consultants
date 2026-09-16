@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 
 import { AuthHeroPanel } from '@/components/auth-hero-panel';
 import { AuthSheetLayout } from '@/components/auth-sheet-layout';

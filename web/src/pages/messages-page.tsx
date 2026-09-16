@@ -789,7 +789,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     setAwaitingScheduledSince(null);
     setActiveId(null);
     setSelectedStudentId(null);
-    setStudentSearch('');
     setInboxPanel('students');
   }
 
@@ -798,7 +797,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     setActiveId(null);
     setSelectedStudentId(null);
     setInboxPanel('menu');
-    setStudentSearch('');
     setBroadcastDraft('');
     setBroadcastStudentIds([]);
     setBroadcastSearch('');
