@@ -173,6 +173,7 @@ class UniversitySuggestionController extends Controller
 
         $suggestion = DB::transaction(function () use ($suggestion, $staff, $validated) {
             $university = University::query()
+                ->where('listed_in_catalog', true)
                 ->where('country', $suggestion->country)
                 ->whereRaw('LOWER(name) = ?', [mb_strtolower($suggestion->name)])
                 ->first();
@@ -184,7 +185,9 @@ class UniversitySuggestionController extends Controller
                     'country' => $suggestion->country,
                     'city' => $suggestion->city,
                     'description' => null,
-                    'is_visible_to_students' => true,
+                    // Keep suggestion acceptances assigned to the student only — never the shared catalog.
+                    'is_visible_to_students' => false,
+                    'listed_in_catalog' => false,
                 ]);
             }
 

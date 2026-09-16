@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 
+import { DirectoryList } from '@/components/directory-list';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { departmentRoutes } from '@/lib/department-routes';
@@ -98,91 +99,96 @@ export function ConsultantUniversitiesCatalogPage() {
       title="University catalog"
       backTo={routes.universities.root}
       backLabel="Universities">
-      {error ? <p className="form-error">{error}</p> : null}
+      <div className="page-stack">
+        {error ? <p className="form-error">{error}</p> : null}
 
-      <section className="panel">
-        <div
-          className="dept-student-banner"
-          style={{ padding: 0, boxShadow: 'none', background: 'transparent' }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Catalog</h2>
-            <p className="muted" style={{ margin: '6px 0 0' }}>
-              {catalogQuery.isLoading
-                ? 'Loading…'
-                : `${catalog.length} universit${catalog.length === 1 ? 'y' : 'ies'}`}
-            </p>
-          </div>
-          {canManageCatalog ? (
-            <button type="button" className="ghost-btn" onClick={() => setShowForm((v) => !v)}>
-              {showForm ? 'Hide form' : 'Add university'}
-            </button>
-          ) : null}
-        </div>
+        <DirectoryList
+          title="Catalog"
+          countLabel={
+            catalogQuery.isLoading
+              ? '…'
+              : `${catalog.length} universit${catalog.length === 1 ? 'y' : 'ies'}`
+          }
+          searchPlaceholder="Search by name or country"
+          searchLabel="Search universities"
+          primaryColumn="University"
+          secondaryColumn="Location"
+          headerAction={
+            canManageCatalog ? (
+              <button type="button" className="ghost-btn" onClick={() => setShowForm((v) => !v)}>
+                {showForm ? 'Hide form' : 'Add university'}
+              </button>
+            ) : null
+          }
+          items={catalog.map((university) => ({
+            id: university.id,
+            title: university.name,
+            subtitle: [university.city, university.country].filter(Boolean).join(', '),
+            searchText: university.description,
+            actionLabel: (university.required_documents ?? []).length
+              ? `${(university.required_documents ?? []).length} docs`
+              : '—',
+          }))}
+          loading={catalogQuery.isLoading}
+          emptyTitle="Catalog is empty"
+          emptyBody="Add universities to share with students."
+        />
 
         {canManageCatalog && showForm ? (
-          <form className="org-form" onSubmit={onCreate} style={{ marginTop: 18 }}>
-            <label className="field">
-              <span>Name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} required />
-            </label>
-            <label className="field">
-              <span>Country</span>
-              <input value={country} onChange={(event) => setCountry(event.target.value)} required />
-            </label>
-            <label className="field">
-              <span>City</span>
-              <input value={city} onChange={(event) => setCity(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>Description</span>
-              <input value={description} onChange={(event) => setDescription(event.target.value)} />
-            </label>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={visible}
-                onChange={(event) => setVisible(event.target.checked)}
-              />
-              Visible when shared with students
-            </label>
-            <div className="org-permissions">
-              <legend>Required documents</legend>
-              {DOCUMENT_TYPES.map((item) => (
-                <label key={item.value} className="check-row">
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.includes(item.value)}
-                    onChange={() => toggleType(item.value)}
-                  />
-                  {item.label}
-                </label>
-              ))}
-            </div>
-            <button className="primary-btn" type="submit" disabled={createUniversity.isPending}>
-              Save university
-            </button>
-          </form>
-        ) : null}
-
-        <div className="stack-list" style={{ marginTop: 16 }}>
-          {catalog.map((university) => (
-            <div key={university.id} className="stack-item">
-              <div>
-                <strong>{university.name}</strong>
-                <span>
-                  {[university.city, university.country].filter(Boolean).join(', ')}
-                  {(university.required_documents ?? []).length
-                    ? ` · ${(university.required_documents ?? []).length} required docs`
-                    : ''}
-                </span>
+          <section className="panel">
+            <h2>Add university</h2>
+            <form className="org-form" onSubmit={onCreate}>
+              <label className="field">
+                <span>Name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Country</span>
+                <input
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>City</span>
+                <input value={city} onChange={(event) => setCity(event.target.value)} />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <input
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+              </label>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  onChange={(event) => setVisible(event.target.checked)}
+                />
+                Visible when shared with students
+              </label>
+              <div className="org-permissions">
+                <legend>Required documents</legend>
+                {DOCUMENT_TYPES.map((item) => (
+                  <label key={item.value} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedTypes.includes(item.value)}
+                      onChange={() => toggleType(item.value)}
+                    />
+                    {item.label}
+                  </label>
+                ))}
               </div>
-            </div>
-          ))}
-          {!catalogQuery.isLoading && catalog.length === 0 ? (
-            <p className="muted">Catalog is empty.</p>
-          ) : null}
-        </div>
-      </section>
+              <button className="primary-btn" type="submit" disabled={createUniversity.isPending}>
+                Save university
+              </button>
+            </form>
+          </section>
+        ) : null}
+      </div>
     </AppShell>
   );
 }

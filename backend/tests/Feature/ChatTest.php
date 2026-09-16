@@ -41,7 +41,7 @@ class ChatTest extends TestCase
         $start
             ->assertCreated()
             ->assertJsonPath('data.conversation.department', 'finance')
-            ->assertJsonPath('data.conversation.other_user.name', 'A/C & Finance')
+            ->assertJsonPath('data.conversation.other_user.name', 'Finance')
             ->assertJsonPath('data.messages.0.body', 'Hi, I need a fee invoice.');
 
         $conversationId = $start->json('data.conversation.id');
@@ -83,6 +83,86 @@ class ChatTest extends TestCase
         $this->getJson('/api/notifications')
             ->assertOk()
             ->assertJsonPath('unread_count', 0);
+    }
+
+    public function test_opening_department_without_message_does_not_show_to_staff(): void
+    {
+        $student = User::factory()->student()->create(['name' => 'Sara']);
+        $finance = $this->makeStaff('finance@example.com', StaffDepartment::Finance, 'Finance Staff');
+        $leads = $this->makeStaff('leads@example.com', StaffDepartment::Leads, 'Leads Staff');
+
+        Sanctum::actingAs($student);
+        $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Finance->value,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.conversation', null)
+            ->assertJsonPath('data.department', 'finance');
+
+        $this->assertDatabaseMissing('chat_conversations', [
+            'student_id' => $student->id,
+            'department' => StaffDepartment::Finance->value,
+        ]);
+
+        Sanctum::actingAs($finance);
+        $this->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        Sanctum::actingAs($student);
+        $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Finance->value,
+            'message' => 'Hello finance',
+        ])->assertCreated();
+
+        Sanctum::actingAs($finance);
+        $this->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.other_user.name', 'Sara');
+
+        Sanctum::actingAs($leads);
+        $this->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_student_can_list_leads_department(): void
+    {
+        $student = User::factory()->student()->create();
+
+        Sanctum::actingAs($student);
+        $this->getJson('/api/chat/departments')
+            ->assertOk()
+            ->assertJsonFragment(['value' => 'leads', 'label' => 'Leading']);
+    }
+
+    public function test_staff_can_open_chat_with_any_student(): void
+    {
+        $student = User::factory()->student()->create(['name' => 'Sara']);
+        $finance = $this->makeStaff('finance@example.com', StaffDepartment::Finance, 'Finance Staff');
+
+        Sanctum::actingAs($finance);
+        $start = $this->postJson('/api/chat/staff/student-conversations', [
+            'student_id' => $student->id,
+        ])->assertCreated();
+
+        $conversationId = $start->json('data.conversation.id');
+
+        $this->assertNotNull($conversationId);
+        $this->assertDatabaseHas('chat_conversations', [
+            'id' => $conversationId,
+            'student_id' => $student->id,
+            'department' => StaffDepartment::Finance->value,
+        ]);
+
+        $this->postJson("/api/chat/conversations/{$conversationId}/messages", [
+            'body' => 'Welcome Sara',
+        ])->assertCreated();
+
+        $this->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.other_user.name', 'Sara');
     }
 
     public function test_admin_sees_all_department_conversations(): void
@@ -147,6 +227,44 @@ class ChatTest extends TestCase
             ->assertJsonPath('unread_count', 0);
     }
 
+    public function test_super_admin_opening_student_clears_all_department_unreads(): void
+    {
+        $student = User::factory()->student()->create(['name' => 'Abubakar']);
+        $this->makeStaff('finance@example.com', StaffDepartment::Finance);
+        $this->makeStaff('universities@example.com', StaffDepartment::Universities);
+        $superAdmin = User::factory()->create(['name' => 'Super Admin', 'email' => 'sa@example.com']);
+        $superAdmin->assignRole(Role::SuperAdmin);
+
+        Sanctum::actingAs($student);
+        $financeId = $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Finance->value,
+            'message' => 'Need fee help',
+        ])->assertCreated()->json('data.conversation.id');
+        $universitiesId = $this->postJson('/api/chat/conversations', [
+            'department' => StaffDepartment::Universities->value,
+            'message' => 'Need uni help',
+        ])->assertCreated()->json('data.conversation.id');
+
+        Sanctum::actingAs($superAdmin);
+        $this->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 2);
+
+        $this->getJson("/api/chat/conversations/{$universitiesId}/messages")
+            ->assertOk();
+
+        $list = $this->getJson('/api/chat/conversations')->assertOk();
+        $list->assertJsonPath('unread_count', 0);
+        $this->assertSame(
+            0,
+            collect($list->json('data'))->firstWhere('id', $financeId)['unread_count'] ?? null,
+        );
+        $this->assertSame(
+            0,
+            collect($list->json('data'))->firstWhere('id', $universitiesId)['unread_count'] ?? null,
+        );
+    }
+
     public function test_user_cannot_open_someone_elses_conversation(): void
     {
         $student = User::factory()->student()->create();
@@ -172,6 +290,7 @@ class ChatTest extends TestCase
 
         $start = $this->postJson('/api/chat/conversations', [
             'department' => StaffDepartment::Finance->value,
+            'message' => 'Hello',
         ])->assertCreated();
 
         $conversationId = $start->json('data.conversation.id');

@@ -82,24 +82,29 @@ class StudentApplicationService
             'everything_accepted' => $everythingAccepted,
         ];
 
-        if ($everythingAccepted && $application->preparation_unlocked_at === null) {
-            $updates['preparation_unlocked_at'] = now();
-            $updates['preparation_title'] = $application->preparation_title
-                ?: 'Interview preparation';
-            $updates['preparation_body'] = $application->preparation_body
-                ?: "Your documents and charge slips are accepted.\n\nPrepare for your interview by reviewing your personal details, uploaded documents, and university requirements. Practice common admission questions and keep your passport ready.";
-        }
+        if ($everythingAccepted) {
+            if ($application->interview_unlocked_at === null) {
+                $updates['interview_unlocked_at'] = now();
+            }
 
-        if ($everythingAccepted && in_array($application->stage, [
-            ApplicationStage::DocumentsAndCharges,
-        ], true)) {
-            $updates['stage'] = ApplicationStage::Preparation;
+            if (in_array($application->stage, [
+                ApplicationStage::DocumentsAndCharges,
+                ApplicationStage::Preparation,
+            ], true)) {
+                $updates['stage'] = ApplicationStage::Interview;
+            }
+
+            // Legacy field — prep step removed; keep populated for older clients.
+            if ($application->preparation_completed_at === null) {
+                $updates['preparation_completed_at'] = now();
+            }
         }
 
         if ((! $everythingAccepted || $hasOpenUrgent) && $application->stage !== ApplicationStage::Completed) {
             $updates['stage'] = ApplicationStage::DocumentsAndCharges;
             $updates['preparation_unlocked_at'] = null;
             $updates['interview_unlocked_at'] = null;
+            $updates['preparation_completed_at'] = null;
         }
 
         $application->fill($updates)->save();
@@ -179,9 +184,10 @@ class StudentApplicationService
                 'fees_cleared' => $receipts->isNotEmpty()
                     && $receiptsApproved === $receipts->count(),
             ],
-            'preparation_available' => $application->everything_accepted && $application->preparation_unlocked_at !== null,
-            'interview_available' => $application->interview_unlocked_at !== null
-                || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true),
+            'preparation_available' => false,
+            'interview_available' => $application->everything_accepted
+                && ($application->interview_unlocked_at !== null
+                    || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true)),
             'current_status' => $currentStatus,
         ];
     }

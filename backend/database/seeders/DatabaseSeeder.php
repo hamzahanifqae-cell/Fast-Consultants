@@ -90,7 +90,7 @@ class DatabaseSeeder extends Seeder
             $staff = User::query()->updateOrCreate(
                 ['email' => $department->value.'@example.com'],
                 [
-                    'name' => $department->label().' Staff',
+                    'name' => $department->label(),
                     'password' => Hash::make('password'),
                     'email_verified_at' => now(),
                     'staff_department' => $department,

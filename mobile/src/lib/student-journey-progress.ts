@@ -50,21 +50,7 @@ export function isProfileComplete(profile: StudentProfile | undefined) {
   );
 }
 
-export function isInterviewJourneyComplete(
-  interview: ApplicationStatusResponse['application']['interview'] | undefined,
-): boolean {
-  if (!interview) return false;
-  if (
-    interview.status === 'completed' ||
-    interview.status === 'passed' ||
-    interview.status === 'failed'
-  ) {
-    return true;
-  }
-  return (
-    Boolean(interview.meeting_ended_at) && interview.followup_preference === 'decline_another'
-  );
-}
+export { isInterviewJourneyComplete } from '@/lib/interview';
 
 export function isVisaJourneyComplete(appointments: VisaAppointment[]) {
   return appointments.some((appointment) => appointment.status === 'completed');

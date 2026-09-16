@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
@@ -14,6 +13,7 @@ import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
+import { AppButton } from '@/components/ui/app-button';
 import { Brand } from '@/constants/theme';
 import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
 import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
@@ -21,8 +21,6 @@ import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useKeyboardBottomInset } from '@/hooks/use-keyboard-bottom-inset';
 import { useTheme } from '@/hooks/use-theme';
 import { api, getApiErrorMessage } from '@/lib/api';
-import { useAuthStore } from '@/stores/auth-store';
-import type { AuthResponse } from '@/types/auth';
 
 export default function RegisterScreen() {
   const params = useLocalSearchParams<{ role?: string }>();
@@ -30,7 +28,6 @@ export default function RegisterScreen() {
     const raw = Array.isArray(params.role) ? params.role[0] : params.role;
     return raw === 'consultant';
   }, [params.role]);
-  const setSession = useAuthStore((state) => state.setSession);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,6 +35,7 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const keyboardInset = useKeyboardBottomInset();
   const keyboardVisible = keyboardInset > 40;
@@ -56,18 +54,25 @@ export default function RegisterScreen() {
 
   async function onSubmit() {
     setError(null);
+    setSuccess(null);
     setSubmitting(true);
 
     try {
-      const { data } = await api.post<AuthResponse>('/register', {
+      const { data } = await api.post<{ message?: string }>('/register', {
         name,
         email,
         password,
         password_confirmation: passwordConfirmation,
         account_type: 'student',
       });
-      await setSession(data.token, data.user);
-      router.replace('/home');
+      setSuccess(
+        data.message ??
+          'Account created. Leads staff will review your request. You can sign in after it is approved.',
+      );
+      setName('');
+      setEmail('');
+      setPassword('');
+      setPasswordConfirmation('');
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not create the account.'));
     } finally {
@@ -131,7 +136,9 @@ export default function RegisterScreen() {
             <BrandLogo size={40} />
             <Text style={styles.roleTag}>Student</Text>
             <Text style={styles.brand}>Fast Consultants</Text>
-            <Text style={styles.heroSub}>Create a student account to get started.</Text>
+            <Text style={styles.heroSub}>
+              Create a student account. Leads staff must approve it before you can sign in.
+            </Text>
           </View>
         ) : null}
 
@@ -156,91 +163,93 @@ export default function RegisterScreen() {
               </Link>
             </View>
 
-            <TextInput
-              autoComplete="name"
-              onChangeText={setName}
-              placeholder="Full name"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, inputStyle]}
-              value={name}
-            />
-            <TextInput
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, inputStyle]}
-              value={email}
-            />
-            <View style={styles.passwordWrap}>
-              <TextInput
-                autoCapitalize="none"
-                onChangeText={setPassword}
-                placeholder="Password (min 8 characters)"
-                placeholderTextColor={theme.textSecondary}
-                secureTextEntry={!showPassword}
-                style={[styles.input, styles.passwordInput, inputStyle]}
-                value={password}
-              />
-              <Pressable
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                hitSlop={8}
-                onPress={() => setShowPassword((value) => !value)}
-                style={styles.eye}>
-                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
-                  {showPassword ? 'Hide' : 'Show'}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={styles.passwordWrap}>
-              <TextInput
-                autoCapitalize="none"
-                onChangeText={setPasswordConfirmation}
-                placeholder="Confirm password"
-                placeholderTextColor={theme.textSecondary}
-                secureTextEntry={!showPasswordConfirmation}
-                style={[styles.input, styles.passwordInput, inputStyle]}
-                value={passwordConfirmation}
-              />
-              <Pressable
-                accessibilityLabel={
-                  showPasswordConfirmation ? 'Hide confirm password' : 'Show confirm password'
-                }
-                hitSlop={8}
-                onPress={() => setShowPasswordConfirmation((value) => !value)}
-                style={styles.eye}>
-                <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
-                  {showPasswordConfirmation ? 'Hide' : 'Show'}
-                </Text>
-              </Pressable>
-            </View>
+            {success ? (
+              <View style={styles.successBox}>
+                <Text style={styles.successTitle}>Request submitted</Text>
+                <Text style={[styles.successBody, { color: theme.text }]}>{success}</Text>
+                <Link href={{ pathname: '/login', params: { role: 'student' } }} asChild>
+                  <Pressable style={{ marginTop: 8 }}>
+                    <ThemedText type="linkPrimary">Go to Sign In</ThemedText>
+                  </Pressable>
+                </Link>
+              </View>
+            ) : (
+              <>
+                <TextInput
+                  autoComplete="name"
+                  onChangeText={setName}
+                  placeholder="Full name"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.input, inputStyle]}
+                  value={name}
+                />
+                <TextInput
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  onChangeText={setEmail}
+                  placeholder="Email"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.input, inputStyle]}
+                  value={email}
+                />
+                <View style={styles.passwordWrap}>
+                  <TextInput
+                    autoCapitalize="none"
+                    onChangeText={setPassword}
+                    placeholder="Password (min 8 characters)"
+                    placeholderTextColor={theme.textSecondary}
+                    secureTextEntry={!showPassword}
+                    style={[styles.input, styles.passwordInput, inputStyle]}
+                    value={password}
+                  />
+                  <Pressable
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    hitSlop={8}
+                    onPress={() => setShowPassword((value) => !value)}
+                    style={styles.eye}>
+                    <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                      {showPassword ? 'Hide' : 'Show'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={styles.passwordWrap}>
+                  <TextInput
+                    autoCapitalize="none"
+                    onChangeText={setPasswordConfirmation}
+                    placeholder="Confirm password"
+                    placeholderTextColor={theme.textSecondary}
+                    secureTextEntry={!showPasswordConfirmation}
+                    style={[styles.input, styles.passwordInput, inputStyle]}
+                    value={passwordConfirmation}
+                  />
+                  <Pressable
+                    accessibilityLabel={
+                      showPasswordConfirmation ? 'Hide confirm password' : 'Show confirm password'
+                    }
+                    hitSlop={8}
+                    onPress={() => setShowPasswordConfirmation((value) => !value)}
+                    style={styles.eye}>
+                    <Text style={[styles.eyeIcon, { color: theme.textSecondary }]}>
+                      {showPasswordConfirmation ? 'Hide' : 'Show'}
+                    </Text>
+                  </Pressable>
+                </View>
 
-            {error ? (
-              <ThemedText type="small" themeColor="danger" style={styles.error}>
-                {error}
-              </ThemedText>
-            ) : null}
+                {error ? (
+                  <ThemedText type="small" themeColor="danger" style={styles.error}>
+                    {error}
+                  </ThemedText>
+                ) : null}
 
-            {/* CTA directly under confirm password — 8px gap, no flex spacer */}
-            <Pressable
-              accessibilityLabel="Sign Up"
-              accessibilityRole="button"
-              disabled={submitting}
-              onPress={() => void onSubmit()}
-              style={({ pressed }) => [
-                styles.ctaWrap,
-                { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
-              ]}>
-              <LinearGradient
-                colors={[...Brand.buttonGradient]}
-                end={{ x: 1, y: 1 }}
-                start={{ x: 0, y: 0 }}
-                style={styles.cta}>
-                <Text style={styles.ctaLabel}>{submitting ? 'Creating…' : 'Sign Up'}</Text>
-              </LinearGradient>
-            </Pressable>
+                <AppButton
+                  accessibilityLabel="Sign Up"
+                  disabled={submitting}
+                  label={submitting ? 'Creating…' : 'Sign Up'}
+                  onPress={() => void onSubmit()}
+                />
+              </>
+            )}
 
             {!keyboardVisible ? (
               <View style={styles.themeBlock}>
@@ -357,20 +366,20 @@ const styles = StyleSheet.create({
   error: {
     textAlign: 'center',
   },
-  ctaWrap: {
-    borderRadius: 16,
-    overflow: 'hidden',
+  successBox: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+    backgroundColor: 'rgba(31, 157, 98, 0.12)',
   },
-  cta: {
-    minHeight: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaLabel: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  successTitle: {
+    fontSize: 15,
     fontWeight: '700',
+    color: Brand.ink,
+  },
+  successBody: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   themeBlock: {
     marginTop: 4,

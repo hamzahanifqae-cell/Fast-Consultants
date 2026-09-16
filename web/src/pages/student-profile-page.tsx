@@ -14,6 +14,7 @@ import { StudentRoutes } from '@/lib/department-routes';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DocumentType, InformationCategory, StudentDocument, StudentProfile } from '@/types/auth';
 import './dashboard.css';
+import './auth.css';
 
 type EducationEntry = {
   key: string;
@@ -903,7 +904,7 @@ export function StudentProfilePage() {
                               />
                               <button
                                 type="button"
-                                className="ghost-btn"
+                                className="primary-btn"
                                 disabled={
                                   !educationDocMeta ||
                                   !educationFile ||

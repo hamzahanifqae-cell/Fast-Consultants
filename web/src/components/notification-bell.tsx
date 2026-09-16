@@ -30,7 +30,7 @@ function resolveRoute(item: UserNotification, isTeam: boolean): string | null {
 
   const mobileToWeb: Record<string, string> = {
     '/student-charge-receipts': StudentRoutes.chargeReceipts,
-    '/student-preparation': StudentRoutes.preparation,
+    '/student-preparation': StudentRoutes.interview,
     '/student-interview': StudentRoutes.interview,
     '/student-status': StudentRoutes.status,
     '/student-documents': StudentRoutes.documents,

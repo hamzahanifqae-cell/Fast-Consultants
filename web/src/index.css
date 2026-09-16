@@ -125,7 +125,7 @@ button,
     opacity 0.18s ease;
 }
 
-button:not(.chat-list-item):not(.notif-row):not(.shell-nav-link):not(.searchable-select-trigger):not(.searchable-select-option):not(.page-back-btn):not(.dept-directory-row),
+button:not(.chat-list-item):not(.notif-row):not(.shell-nav-link):not(.searchable-select-trigger):not(.searchable-select-option):not(.page-back-btn):not(.dept-directory-row):not(.leads-list-item):not(.chat-menu-card):not(.chat-team-card),
 a.primary-btn,
 .primary-btn,
 .ghost-btn,
@@ -139,11 +139,11 @@ a.primary-btn,
   line-height: 1.2;
 }
 
-button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option):not(.leads-list-item),
+button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option):not(.leads-list-item):not(.chat-list-item):not(.chat-menu-card):not(.chat-team-card),
 .primary-btn:hover:not(:disabled),
 .ghost-btn:hover:not(:disabled),
 .chat-block-btn:hover:not(:disabled),
-.chat-composer button:hover:not(:disabled),
+.chat-composer button:hover:not(:disabled):not(.chat-attach-btn),
 .notif-trigger:hover,
 .notif-done:hover,
 .dash-quick-card:hover,
@@ -152,11 +152,16 @@ button:hover:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.s
   transform: translateY(-1px);
 }
 
-button:active:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option):not(.leads-list-item),
+.chat-composer button.chat-attach-btn:hover:not(:disabled),
+.chat-composer button.chat-attach-btn:active:not(:disabled) {
+  transform: none;
+}
+
+button:active:not(:disabled):not(.shell-nav-link):not(.dept-directory-row):not(.searchable-select-trigger):not(.searchable-select-option):not(.leads-list-item):not(.chat-list-item):not(.chat-menu-card):not(.chat-team-card),
 .primary-btn:active:not(:disabled),
 .ghost-btn:active:not(:disabled),
 .chat-block-btn:active:not(:disabled),
-.chat-composer button:active:not(:disabled),
+.chat-composer button:active:not(:disabled):not(.chat-attach-btn),
 .notif-trigger:active,
 .notif-done:active,
 .dash-quick-card:active,

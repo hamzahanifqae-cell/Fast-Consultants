@@ -39,11 +39,12 @@ type ChatPanelProps = {
 type ViewMode = 'home' | 'pick' | 'thread' | 'blocked' | 'team' | 'broadcast' | 'students';
 
 type StaffDirectoryMember = {
-  id: number;
+  id: number | null;
   name: string;
-  email: string;
+  email: string | null;
   staff_department: string | null;
   staff_department_label: string | null;
+  available?: boolean;
 };
 
 type BroadcastStudent = {
@@ -84,12 +85,13 @@ export function ChatPanel({
 
   const [mode, setMode] = useState<ViewMode>('home');
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [pendingDepartment, setPendingDepartment] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
-  const [showTeamDirectory, setShowTeamDirectory] = useState(false);
   const [broadcastStudentIds, setBroadcastStudentIds] = useState<number[]>([]);
   const [broadcastDraft, setBroadcastDraft] = useState('');
   const [broadcastDepartment, setBroadcastDepartment] = useState('');
   const [broadcastSearch, setBroadcastSearch] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
   const [attachmentFile, setAttachmentFile] = useState<PickedAttachment | null>(null);
   const [broadcastAttachmentFile, setBroadcastAttachmentFile] = useState<PickedAttachment | null>(
     null,
@@ -106,12 +108,13 @@ export function ChatPanel({
     if (!visible) {
       setMode('home');
       setActiveId(null);
+      setPendingDepartment(null);
       setSelectedStudentId(null);
-      setShowTeamDirectory(false);
       setBroadcastStudentIds([]);
       setBroadcastDraft('');
       setBroadcastDepartment('');
       setBroadcastSearch('');
+      setStudentSearch('');
       setAttachmentFile(null);
       setBroadcastAttachmentFile(null);
       setScheduleAt(null);
@@ -188,7 +191,7 @@ export function ChatPanel({
 
   const broadcastStudentsQuery = useQuery({
     queryKey: ['consultant-students'],
-    enabled: visible && isConsultant && mode === 'broadcast',
+    enabled: visible && isConsultant && (mode === 'broadcast' || mode === 'students'),
     queryFn: async () => {
       const { data } = await api.get<{ data: BroadcastStudent[] }>('/consultant/students');
       return data.data;
@@ -198,6 +201,7 @@ export function ChatPanel({
   const blockedStudents = blocksQuery.data ?? [];
   const staffDirectory = staffDirectoryQuery.data ?? [];
   const broadcastStudents = broadcastStudentsQuery.data ?? [];
+  const directoryStudents = broadcastStudents;
   const filteredBroadcastStudents = useMemo(() => {
     const query = broadcastSearch.trim().toLowerCase();
     if (!query) {
@@ -231,9 +235,15 @@ export function ChatPanel({
   }, [visible, initialConversationId, conversations]);
 
   const groupedStudents = useMemo(() => {
-    if (!isSuperAdmin && !isDepartmentStaff) {
+    if (!isConsultant) {
       return [];
     }
+
+    const blockedIds = new Set(
+      blockedStudents
+        .map((block) => block.student_id ?? block.student?.id)
+        .filter((id): id is number => typeof id === 'number'),
+    );
 
     const byStudentId = new Map<
       number,
@@ -248,9 +258,23 @@ export function ChatPanel({
       }
     >();
 
+    for (const student of directoryStudents) {
+      if (blockedIds.has(student.id)) continue;
+      byStudentId.set(student.id, {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        unreadCount: 0,
+        preview: 'No messages yet',
+        lastMessageAt: null,
+        isBlocked: false,
+      });
+    }
+
     for (const conversation of studentConversations) {
       const student = conversation.other_user;
       if (student.id == null) continue;
+      if (blockedIds.has(student.id)) continue;
       const existing = byStudentId.get(student.id);
       const unreadCount = (existing?.unreadCount ?? 0) + (conversation.unread_count ?? 0);
       const lastMessageAt =
@@ -264,15 +288,15 @@ export function ChatPanel({
 
       byStudentId.set(student.id, {
         id: student.id,
-        name: student.name ?? 'Student',
-        email: student.email ?? '',
+        name: student.name ?? existing?.name ?? 'Student',
+        email: student.email ?? existing?.email ?? '',
         unreadCount,
         preview: shouldReplace
           ? conversation.last_message
             ? conversation.last_message.mine
               ? `You: ${conversation.last_message.body}`
               : conversation.last_message.body
-            : 'No messages yet'
+            : (existing?.preview ?? 'No messages yet')
           : (existing?.preview ?? 'No messages yet'),
         lastMessageAt: shouldReplace ? lastMessageAt : (existing?.lastMessageAt ?? null),
         isBlocked: Boolean(existing?.isBlocked || conversation.is_blocked),
@@ -282,12 +306,21 @@ export function ChatPanel({
     return Array.from(byStudentId.values()).sort((left, right) =>
       left.name.localeCompare(right.name),
     );
-  }, [studentConversations, isDepartmentStaff, isSuperAdmin]);
+  }, [directoryStudents, studentConversations, blockedStudents, isConsultant]);
 
   const inboxGroupedStudents = useMemo(
     () => groupedStudents.filter((student) => !student.isBlocked),
     [groupedStudents],
   );
+
+  const filteredInboxStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    if (!query) return inboxGroupedStudents;
+    return inboxGroupedStudents.filter(
+      (student) =>
+        student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query),
+    );
+  }, [inboxGroupedStudents, studentSearch]);
 
   const inboxConversations = useMemo(
     () =>
@@ -306,21 +339,22 @@ export function ChatPanel({
   }, [groupedStudents, selectedStudentId]);
 
   const selectedStudentConversations = useMemo(() => {
-    if (!isSuperAdmin || !selectedStudentId) {
+    if ((!isSuperAdmin && !isOrgWideViewer) || !selectedStudentId) {
       return [];
     }
 
     return studentConversations.filter(
       (conversation) => conversation.other_user.id === selectedStudentId,
     );
-  }, [studentConversations, isSuperAdmin, selectedStudentId]);
+  }, [studentConversations, isSuperAdmin, isOrgWideViewer, selectedStudentId]);
 
   const departmentsQuery = useQuery({
     queryKey: ['chat-departments'],
     enabled:
       visible &&
       ((mode === 'pick' &&
-        ((!isConsultant && !isSuperAdmin) || (isSuperAdmin && selectedStudentId !== null))) ||
+        ((!isConsultant && !isSuperAdmin) ||
+          ((isSuperAdmin || isOrgWideViewer) && selectedStudentId !== null))) ||
         (mode === 'broadcast' && needsBroadcastDepartment)),
     queryFn: async () => {
       const { data } = await api.get<{ data: ChatDepartment[] }>('/chat/departments');
@@ -441,6 +475,42 @@ export function ChatPanel({
       file: PickedAttachment | null;
       scheduledAt: Date | null;
     }) => {
+      let conversationId = activeId;
+
+      if (!conversationId && pendingDepartment && !isConsultant) {
+        const opener = body.trim() || (file ? 'Attachment' : '');
+        if (!opener) {
+          throw new Error('Message required');
+        }
+
+        const { data: started } = await api.post<{
+          data: { conversation: ChatConversation };
+        }>('/chat/conversations', {
+          department: pendingDepartment,
+          message: opener,
+        });
+        conversationId = started.data.conversation.id;
+
+        if (file) {
+          const formData = new FormData();
+          formData.append('body', body.trim() && body.trim() !== opener ? body.trim() : '');
+          formData.append('attachment', {
+            uri: file.uri,
+            name: file.name,
+            type: file.mimeType ?? 'application/octet-stream',
+          } as unknown as Blob);
+          await api.post(`/chat/conversations/${conversationId}/messages`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        }
+
+        return { conversationId };
+      }
+
+      if (!conversationId) {
+        throw new Error('No conversation');
+      }
+
       const formData = new FormData();
       formData.append('body', body);
       if (file) {
@@ -459,24 +529,31 @@ export function ChatPanel({
           message?: ChatMessage;
           scheduled?: boolean;
           scheduled_at?: string;
+          conversationId?: number;
         };
-      }>(`/chat/conversations/${activeId}/messages`, formData, {
+      }>(`/chat/conversations/${conversationId}/messages`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      return data.data;
+      return { ...data.data, conversationId };
     },
     onSuccess: async (payload) => {
       setDraft('');
       setAttachmentFile(null);
       setScheduleAt(null);
       setError(null);
+      if (payload.conversationId) {
+        setActiveId(payload.conversationId);
+        setPendingDepartment(null);
+      }
       if (payload.scheduled) {
         Alert.alert(
           'Message scheduled',
           `Will send at ${payload.scheduled_at ? new Date(payload.scheduled_at).toLocaleString() : 'the selected time'}.`,
         );
       }
-      await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
+      await queryClient.invalidateQueries({
+        queryKey: ['chat-messages', payload.conversationId ?? activeId],
+      });
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -572,18 +649,39 @@ export function ChatPanel({
 
   const startChat = useMutation({
     mutationFn: async (department: string) => {
+      const existing = conversations.find((item) => item.department === department);
+      if (existing) {
+        return { conversation: existing, department };
+      }
+
       const { data } = await api.post<{
-        data: { conversation: ChatConversation; messages: ChatMessage[] };
+        data: {
+          conversation: ChatConversation | null;
+          department?: string;
+          department_label?: string;
+          messages: ChatMessage[];
+        };
       }>('/chat/conversations', {
         department,
       });
-      return data.data;
+      return {
+        conversation: data.data.conversation,
+        department: data.data.department ?? department,
+      };
     },
     onSuccess: async (payload) => {
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
-      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setActiveId(payload.conversation.id);
+      if (payload.conversation) {
+        setPendingDepartment(null);
+        await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+        await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        setActiveId(payload.conversation.id);
+        setMode('thread');
+        return;
+      }
+
+      setActiveId(null);
+      setPendingDepartment(payload.department);
       setMode('thread');
     },
     onError: (err) => {
@@ -606,7 +704,22 @@ export function ChatPanel({
     onSuccess: async (payload) => {
       setError(null);
       setSelectedStudentId(null);
-      setShowTeamDirectory(false);
+      queryClient.setQueryData<{ data: ChatConversation[]; unread_count: number }>(
+        ['chat-conversations'],
+        (current) => {
+          const conversation = payload.conversation;
+          if (!current) {
+            return { data: [conversation], unread_count: 0 };
+          }
+          const alreadyListed = current.data.some((item) => item.id === conversation.id);
+          return {
+            ...current,
+            data: alreadyListed
+              ? current.data.map((item) => (item.id === conversation.id ? conversation : item))
+              : [conversation, ...current.data],
+          };
+        },
+      );
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
       setActiveId(payload.conversation.id);
@@ -804,15 +917,55 @@ export function ChatPanel({
     );
   }
 
+  const startStudentThread = useMutation({
+    mutationFn: async ({
+      studentId,
+      department,
+    }: {
+      studentId: number;
+      department?: string;
+    }) => {
+      const existing = studentConversations.find(
+        (item) =>
+          item.other_user.id === studentId &&
+          (!department || item.department === department),
+      );
+      if (existing) return existing;
+
+      const { data } = await api.post<{
+        data: { conversation: ChatConversation };
+      }>('/chat/staff/student-conversations', {
+        student_id: studentId,
+        ...(department ? { department } : {}),
+      });
+      return data.data.conversation;
+    },
+    onSuccess: async (conversation) => {
+      setError(null);
+      setSelectedStudentId(conversation.other_user.id ?? selectedStudentId);
+      setActiveId(conversation.id);
+      setMode('thread');
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      await queryClient.invalidateQueries({ queryKey: ['chat-messages', conversation.id] });
+    },
+    onError: (err) => {
+      setError(getApiErrorMessage(err, 'Could not open student chat.'));
+    },
+  });
+
   function openSuperAdminDepartment(department: string) {
+    if (!selectedStudentId) return;
+
     const existing = selectedStudentConversations.find((item) => item.department === department);
-    if (!existing) {
+    setError(null);
+
+    if (existing) {
+      setActiveId(existing.id);
+      setMode('thread');
       return;
     }
 
-    setError(null);
-    setActiveId(existing.id);
-    setMode('thread');
+    startStudentThread.mutate({ studentId: selectedStudentId, department });
   }
 
   function selectStaffStudent(studentId: number) {
@@ -823,20 +976,36 @@ export function ChatPanel({
       return rightAt.localeCompare(leftAt);
     })[0];
 
-    if (!conversation) {
+    setError(null);
+    setSelectedStudentId(studentId);
+
+    if (conversation) {
+      setActiveId(conversation.id);
+      setMode('thread');
       return;
     }
 
-    setError(null);
-    setActiveId(conversation.id);
-    setSelectedStudentId(studentId);
-    setMode('thread');
+    startStudentThread.mutate({ studentId });
   }
 
   function selectSuperAdminStudent(studentId: number) {
+    const matches = studentConversations.filter((item) => item.other_user.id === studentId);
+    const conversation = matches.sort((left, right) => {
+      const leftAt = left.last_message_at ?? left.last_message?.created_at ?? '';
+      const rightAt = right.last_message_at ?? right.last_message?.created_at ?? '';
+      return rightAt.localeCompare(leftAt);
+    })[0];
+
     setError(null);
-    setActiveId(null);
     setSelectedStudentId(studentId);
+
+    if (conversation) {
+      setActiveId(conversation.id);
+      setMode('thread');
+      return;
+    }
+
+    setActiveId(null);
     setMode('pick');
   }
 
@@ -845,7 +1014,6 @@ export function ChatPanel({
     setDraft('');
 
     if (mode === 'blocked' || mode === 'team' || mode === 'broadcast' || mode === 'students') {
-      setShowTeamDirectory(false);
       setBroadcastStudentIds([]);
       setBroadcastDraft('');
       setBroadcastDepartment('');
@@ -906,6 +1074,7 @@ export function ChatPanel({
     const existing = conversations.find((item) => item.department === department);
     if (existing) {
       setError(null);
+      setPendingDepartment(null);
       setActiveId(existing.id);
       setMode('thread');
       return;
@@ -954,6 +1123,7 @@ export function ChatPanel({
     !studentComposerLocked &&
     !scheduleAt &&
     (draft.trim().length > 0 || Boolean(attachmentFile));
+  const composerReady = Boolean(activeId) || Boolean(pendingDepartment && !isConsultant);
 
   function onSendWhatsApp() {
     if (!canSendWhatsApp) return;
@@ -963,6 +1133,9 @@ export function ChatPanel({
   const studentName = activeConversation?.other_user?.name;
   const departmentLabel =
     activeConversation?.department_label ??
+    (pendingDepartment
+      ? departmentsQuery.data?.find((item) => item.value === pendingDepartment)?.label
+      : undefined) ??
     conversations.find((item) => item.id === activeId)?.department_label;
 
   const headerTitle =
@@ -978,7 +1151,9 @@ export function ChatPanel({
               ? 'Home'
             : mode === 'thread'
           ? activeConversation?.kind === 'staff_dm'
-            ? (activeConversation.other_user?.name ?? 'Team chat')
+            ? (activeConversation.other_user?.staff_department_label ??
+              activeConversation.other_user?.name ??
+              'Team chat')
             : isConsultant
               ? isSuperAdmin
                 ? departmentLabel
@@ -1017,13 +1192,7 @@ export function ChatPanel({
             ? 'All student department threads across the organization'
             : 'Students who messaged your department';
 
-  const emptyInboxText = isSuperAdmin
-    ? 'No student messages yet.'
-    : isDepartmentStaff
-      ? 'No student messages for your department yet.'
-      : isOrgWideViewer
-        ? 'No student messages yet.'
-        : 'No student messages for your department yet.';
+  const emptyInboxText = 'No students yet.';
 
   const footerLabel = isSuperAdmin
     ? mode === 'thread'
@@ -1109,10 +1278,6 @@ export function ChatPanel({
                             {block.student.name ?? 'Student'}
                           </Text>
                         </View>
-                        <Text style={styles.conversationEmail} numberOfLines={1}>
-                          {block.student.email ?? 'No email'}
-                          {block.blocked_by?.name ? ` · by ${block.blocked_by.name}` : ''}
-                        </Text>
                         <Pressable
                           disabled={unblockStudent.isPending}
                           onPress={() =>
@@ -1138,80 +1303,39 @@ export function ChatPanel({
             {mode === 'team' && isConsultant ? (
               <View style={styles.homeBody}>
                 <ScrollView contentContainerStyle={styles.conversationList}>
-                  <Pressable
-                    onPress={() => {
-                      setError(null);
-                      setShowTeamDirectory((value) => !value);
-                    }}
-                    style={styles.blockedListButton}>
-                    <Text style={styles.blockedListButtonText}>
-                      {showTeamDirectory ? 'Hide directory' : 'New message'}
-                    </Text>
-                  </Pressable>
-                  {showTeamDirectory ? (
-                    staffDirectoryQuery.isLoading ? (
-                      <ActivityIndicator color={theme.text} style={styles.centeredLoader} />
-                    ) : staffDirectory.length ? (
-                      staffDirectory.map((member) => (
+                  <Text style={styles.helperText}>STAFF DIRECTORY</Text>
+                  {staffDirectoryQuery.isLoading ? (
+                    <ActivityIndicator color={theme.text} style={styles.centeredLoader} />
+                  ) : staffDirectory.length ? (
+                    staffDirectory.map((member) => {
+                      const selected =
+                        member.id != null &&
+                        activeConversation?.kind === 'staff_dm' &&
+                        activeConversation.other_user.id === member.id;
+                      const canSelect = Boolean(member.id) && member.available !== false;
+
+                      return (
                         <Pressable
-                          key={member.id}
-                          disabled={startStaffChat.isPending}
-                          onPress={() => startStaffChat.mutate(member.id)}
-                          style={styles.conversationRow}>
+                          key={member.staff_department ?? member.name}
+                          disabled={!canSelect || startStaffChat.isPending}
+                          onPress={() => {
+                            if (!member.id) return;
+                            startStaffChat.mutate(member.id);
+                          }}
+                          style={[
+                            styles.conversationRow,
+                            selected && styles.broadcastSelectedRow,
+                            !canSelect && styles.conversationRowDisabled,
+                          ]}>
                           <View style={styles.conversationTop}>
                             <Text style={styles.conversationName}>{member.name}</Text>
                           </View>
-                          <Text style={styles.conversationEmail} numberOfLines={1}>
-                            {[member.staff_department_label, member.email].filter(Boolean).join(' · ')}
-                          </Text>
                         </Pressable>
-                      ))
-                    ) : (
-                      <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No other staff found.</Text>
-                      </View>
-                    )
-                  ) : staffDmConversations.length ? (
-                    staffDmConversations.map((conversation) => (
-                      <Pressable
-                        key={conversation.id}
-                        onPress={() => {
-                          setError(null);
-                          setSelectedStudentId(null);
-                          setShowTeamDirectory(false);
-                          setActiveId(conversation.id);
-                          setMode('thread');
-                        }}
-                        style={styles.conversationRow}>
-                        <View style={styles.conversationTop}>
-                          <Text style={styles.conversationName}>
-                            {conversation.other_user.name ?? 'Staff'}
-                          </Text>
-                          {(conversation.unread_count ?? 0) > 0 ? (
-                            <View style={styles.unreadBadge}>
-                              <Text style={styles.unreadBadgeText}>
-                                {conversation.unread_count}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.conversationPreview} numberOfLines={1}>
-                          {conversation.other_user.staff_department_label
-                            ? `${conversation.other_user.staff_department_label} · `
-                            : ''}
-                          {conversation.other_user_typing
-                            ? 'typing…'
-                            : conversation.last_message
-                              ? conversation.last_message.mine
-                                ? `You: ${conversation.last_message.body}`
-                                : conversation.last_message.body
-                              : 'No messages yet'}
-                        </Text>
-                      </Pressable>
-                    ))
+                      );
+                    })
                   ) : (
                     <View style={styles.emptyState}>
-                      <Text style={styles.emptyText}>No team conversations yet.</Text>
+                      <Text style={styles.emptyText}>No other staff found.</Text>
                     </View>
                   )}
                 </ScrollView>
@@ -1413,6 +1537,7 @@ export function ChatPanel({
                     setError(null);
                     setActiveId(null);
                     setSelectedStudentId(null);
+                    setStudentSearch('');
                     setMode('students');
                   }}
                   style={styles.blockedListButton}>
@@ -1434,7 +1559,6 @@ export function ChatPanel({
                     setError(null);
                     setActiveId(null);
                     setSelectedStudentId(null);
-                    setShowTeamDirectory(false);
                     setMode('team');
                   }}
                   style={styles.blockedListButton}>
@@ -1463,35 +1587,50 @@ export function ChatPanel({
               <View style={styles.homeBody}>
                 {conversationsQuery.isLoading ? (
                   <ActivityIndicator color={theme.text} style={styles.centeredLoader} />
-                ) : isSuperAdmin || isDepartmentStaff ? (
+                ) : isSuperAdmin || isDepartmentStaff || isOrgWideViewer ? (
                   inboxGroupedStudents.length ? (
                     <ScrollView contentContainerStyle={styles.conversationList}>
                       <Text style={styles.helperText}>{inboxHelperText}</Text>
-                      {inboxGroupedStudents.map((student) => (
-                        <Pressable
-                          key={student.id}
-                          onPress={() =>
-                            isSuperAdmin
-                              ? selectSuperAdminStudent(student.id)
-                              : selectStaffStudent(student.id)
-                          }
-                          style={styles.conversationRow}>
-                          <View style={styles.conversationTop}>
-                            <Text style={styles.conversationName}>{student.name}</Text>
-                            {student.unreadCount > 0 ? (
-                              <View style={styles.unreadBadge}>
-                                <Text style={styles.unreadBadgeText}>{student.unreadCount}</Text>
-                              </View>
+                      <TextInput
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        clearButtonMode="while-editing"
+                        onChangeText={setStudentSearch}
+                        placeholder="Search by name or email"
+                        placeholderTextColor={theme.textSecondary}
+                        style={styles.broadcastSearchInput}
+                        value={studentSearch}
+                      />
+                      {filteredInboxStudents.length ? (
+                        filteredInboxStudents.map((student) => (
+                          <Pressable
+                            key={student.id}
+                            onPress={() =>
+                              isSuperAdmin
+                                ? selectSuperAdminStudent(student.id)
+                                : selectStaffStudent(student.id)
+                            }
+                            style={styles.conversationRow}>
+                            <View style={styles.conversationTop}>
+                              <Text style={styles.conversationName}>{student.name}</Text>
+                              {student.unreadCount > 0 ? (
+                                <View style={styles.unreadBadge}>
+                                  <Text style={styles.unreadBadgeText}>{student.unreadCount}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            {student.email ? (
+                              <Text style={styles.conversationEmail} numberOfLines={1}>
+                                {student.email}
+                              </Text>
                             ) : null}
-                          </View>
-                          <Text style={styles.conversationEmail} numberOfLines={1}>
-                            {student.email}
-                          </Text>
-                          <Text style={styles.conversationPreview} numberOfLines={1}>
-                            {student.preview}
-                          </Text>
-                        </Pressable>
-                      ))}
+                          </Pressable>
+                        ))
+                      ) : (
+                        <Text style={styles.emptyText}>
+                          No students match “{studentSearch.trim()}”.
+                        </Text>
+                      )}
                     </ScrollView>
                   ) : (
                     <View style={styles.emptyState}>
@@ -1501,7 +1640,30 @@ export function ChatPanel({
                 ) : inboxConversations.length ? (
                   <ScrollView contentContainerStyle={styles.conversationList}>
                     <Text style={styles.helperText}>{inboxHelperText}</Text>
-                    {inboxConversations.map((conversation) => (
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      clearButtonMode="while-editing"
+                      onChangeText={setStudentSearch}
+                      placeholder="Search by name or email"
+                      placeholderTextColor={theme.textSecondary}
+                      style={styles.broadcastSearchInput}
+                      value={studentSearch}
+                    />
+                    {(studentSearch.trim()
+                      ? inboxConversations.filter((conversation) => {
+                          const query = studentSearch.trim().toLowerCase();
+                          const name = conversation.other_user.name?.toLowerCase() ?? '';
+                          const email = conversation.other_user.email?.toLowerCase() ?? '';
+                          const department = conversation.department_label?.toLowerCase() ?? '';
+                          return (
+                            name.includes(query) ||
+                            email.includes(query) ||
+                            department.includes(query)
+                          );
+                        })
+                      : inboxConversations
+                    ).map((conversation) => (
                       <Pressable
                         key={conversation.id}
                         onPress={() => {
@@ -1534,26 +1696,6 @@ export function ChatPanel({
                             )}
                           </View>
                         </View>
-                        <Text style={styles.conversationEmail} numberOfLines={1}>
-                          {conversation.other_user?.email}
-                          {conversation.department_label
-                            ? `, ${conversation.department_label}`
-                            : ''}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.conversationPreview,
-                            conversation.other_user_typing && styles.typingPreview,
-                          ]}
-                          numberOfLines={1}>
-                          {conversation.other_user_typing
-                            ? 'typing…'
-                            : conversation.last_message
-                              ? conversation.last_message.mine
-                                ? `You: ${conversation.last_message.body}`
-                                : conversation.last_message.body
-                              : 'No messages yet'}
-                        </Text>
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -1565,9 +1707,9 @@ export function ChatPanel({
               </View>
             ) : null}
 
-            {mode === 'pick' && (!isConsultant || isSuperAdmin) ? (
+            {mode === 'pick' && (!isConsultant || isSuperAdmin || isOrgWideViewer) ? (
               <ScrollView contentContainerStyle={styles.conversationList}>
-                {isSuperAdmin ? (
+                {isSuperAdmin || isOrgWideViewer ? (
                   <>
                     <Text style={styles.helperText}>
                       {selectedStudent
@@ -1583,12 +1725,9 @@ export function ChatPanel({
                       return (
                         <Pressable
                           key={department.value}
-                          disabled={!existing}
+                          disabled={startStudentThread.isPending}
                           onPress={() => openSuperAdminDepartment(department.value)}
-                          style={[
-                            styles.conversationRow,
-                            !existing && styles.conversationRowDisabled,
-                          ]}>
+                          style={styles.conversationRow}>
                           <View style={styles.conversationTop}>
                             <Text style={styles.conversationName}>{department.label}</Text>
                             {unread > 0 ? (
@@ -1597,20 +1736,6 @@ export function ChatPanel({
                               </View>
                             ) : null}
                           </View>
-                          <Text
-                            style={[
-                              styles.conversationPreview,
-                              existing?.other_user_typing && styles.typingPreview,
-                            ]}
-                            numberOfLines={1}>
-                            {existing?.other_user_typing
-                              ? 'typing…'
-                              : existing?.last_message
-                                ? existing.last_message.mine
-                                  ? `You: ${existing.last_message.body}`
-                                  : existing.last_message.body
-                                : 'No conversation yet'}
-                          </Text>
                         </Pressable>
                       );
                     })}
@@ -1640,20 +1765,6 @@ export function ChatPanel({
                           </View>
                         ) : null}
                       </View>
-                      <Text
-                        style={[
-                          styles.conversationPreview,
-                          existing?.other_user_typing && styles.typingPreview,
-                        ]}
-                        numberOfLines={1}>
-                        {existing?.other_user_typing
-                          ? 'typing…'
-                          : existing?.last_message
-                            ? existing.last_message.mine
-                              ? `You: ${existing.last_message.body}`
-                              : existing.last_message.body
-                            : 'Tap to start a conversation'}
-                      </Text>
                     </Pressable>
                   );
                 })}
@@ -1809,20 +1920,24 @@ export function ChatPanel({
 
                 <View style={styles.composer}>
                   <Pressable
-                    disabled={studentComposerLocked || !activeId}
+                    disabled={studentComposerLocked || !composerReady}
                     onPress={() => void pickAttachment(false)}
                     style={[
                       styles.attachIcon,
-                      (studentComposerLocked || !activeId) && { opacity: 0.45 },
+                      (studentComposerLocked || !composerReady) && { opacity: 0.45 },
                     ]}>
                     <AppIcon name="paperclip" size={16} tintColor={theme.text} />
                   </Pressable>
                   <TextInput
-                    editable={!studentComposerLocked}
+                    editable={!studentComposerLocked && composerReady}
                     multiline
                     onChangeText={setDraft}
                     placeholder={
-                      studentComposerLocked ? 'Chat is blocked' : 'Type a message...'
+                      studentComposerLocked
+                        ? 'Chat is blocked'
+                        : composerReady
+                          ? 'Type a message...'
+                          : 'Select a department first'
                     }
                     placeholderTextColor={theme.textSecondary}
                     style={styles.composerInput}
@@ -1849,6 +1964,7 @@ export function ChatPanel({
                   <Pressable
                     disabled={
                       studentComposerLocked ||
+                      !composerReady ||
                       (draft.trim().length === 0 && !attachmentFile) ||
                       sendMessage.isPending
                     }
@@ -1864,13 +1980,14 @@ export function ChatPanel({
                       {
                         opacity:
                           studentComposerLocked ||
+                          !composerReady ||
                           (draft.trim().length === 0 && !attachmentFile) ||
                           sendMessage.isPending
                             ? 0.45
                             : 1,
                       },
                     ]}>
-                    <AppIcon name="paperplane.fill" size={16} tintColor="#ffffff" />
+                    <AppIcon name="chevron.right" size={18} tintColor="#ffffff" />
                   </Pressable>
                 </View>
               </View>
@@ -1887,7 +2004,6 @@ export function ChatPanel({
                 }
                 if (isConsultant) {
                   if (mode === 'team' || mode === 'broadcast' || mode === 'students') {
-                    setShowTeamDirectory(false);
                     setBroadcastStudentIds([]);
                     setBroadcastDraft('');
                     setBroadcastDepartment('');
@@ -2137,10 +2253,10 @@ function createChatStyles(
   conversationRow: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 2,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 0,
     backgroundColor: theme.background,
   },
   conversationRowDisabled: {
@@ -2406,10 +2522,10 @@ function createChatStyles(
     backgroundColor: theme.inputFill,
   },
   sendIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.inverted,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

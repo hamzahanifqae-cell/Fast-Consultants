@@ -45,6 +45,9 @@ import {
 } from '@/lib/portals';
 import { useAuthStore } from '@/stores/auth-store';
 
+/* Load after page CSS imports so shared button/action-row rules win the cascade. */
+import '@/components/buttons.css';
+
 function LegacyConsultantRedirect() {
   const path = window.location.pathname.replace(/^\/consultant/, '/superadmin');
   const search = window.location.search;

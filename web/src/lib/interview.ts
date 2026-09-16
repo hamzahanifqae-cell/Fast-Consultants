@@ -31,7 +31,7 @@ export function isInterviewMeetingCancelled(
   return interview?.status === 'cancelled' && !interview.at;
 }
 
-type MeetingScheduleInterview = {
+export type MeetingScheduleInterview = {
   status?: string | null;
   at?: string | null;
   mode?: string | null;
@@ -39,6 +39,108 @@ type MeetingScheduleInterview = {
   meeting_ended_at?: string | null;
   followup_preference?: 'want_another' | 'decline_another' | null;
 };
+
+/** Interview stage is finished — not when cancelled or another meeting is pending. */
+export function interviewStatusPillLabel(
+  interview: MeetingScheduleInterview | null | undefined,
+): string {
+  if (isInterviewMeetingCancelled(interview)) return 'Cancelled';
+  if (interview?.at) return 'Scheduled';
+  if (isInterviewJourneyComplete(interview)) return 'Complete';
+  if (interview?.followup_preference === 'want_another') return 'Another requested';
+  if (interview?.meeting_ended_at) return 'Follow-up needed';
+  return 'Waiting';
+}
+
+export function isInterviewJourneyComplete(
+  interview: MeetingScheduleInterview | null | undefined,
+): boolean {
+  if (!interview) return false;
+  if (isInterviewMeetingCancelled(interview)) return false;
+  if (
+    interview.status === 'completed' ||
+    interview.status === 'passed' ||
+    interview.status === 'failed'
+  ) {
+    return true;
+  }
+  return (
+    Boolean(interview.meeting_ended_at) && interview.followup_preference === 'decline_another'
+  );
+}
+
+export type InterviewSectionProgress = {
+  percent: number;
+  title: string;
+  description: string;
+  complete: boolean;
+};
+
+export function interviewSectionProgress(
+  interviewAvailable: boolean,
+  interview: MeetingScheduleInterview | null | undefined,
+): InterviewSectionProgress {
+  if (!interviewAvailable) {
+    return {
+      percent: 0,
+      title: 'Interview locked',
+      description: 'Opens after documents and charge slips are approved.',
+      complete: false,
+    };
+  }
+
+  if (isInterviewJourneyComplete(interview)) {
+    return {
+      percent: 100,
+      title: 'Interview complete',
+      description: 'Your interview stage is finished.',
+      complete: true,
+    };
+  }
+
+  if (isInterviewMeetingCancelled(interview)) {
+    return {
+      percent: 55,
+      title: 'Meeting cancelled',
+      description: 'Staff will schedule a new session.',
+      complete: false,
+    };
+  }
+
+  if (interview?.at) {
+    return {
+      percent: 85,
+      title: 'Meeting scheduled',
+      description: 'Join from this page when the timer opens.',
+      complete: false,
+    };
+  }
+
+  if (interview?.followup_preference === 'want_another') {
+    return {
+      percent: 68,
+      title: 'Another meeting requested',
+      description: 'Staff will schedule your next session.',
+      complete: false,
+    };
+  }
+
+  if (interview?.meeting_ended_at && !interview.followup_preference) {
+    return {
+      percent: 72,
+      title: 'Session ended',
+      description: 'Tell staff whether you want another meeting.',
+      complete: false,
+    };
+  }
+
+  return {
+    percent: 40,
+    title: 'Waiting for schedule',
+    description: 'Interview staff will book your session time.',
+    complete: false,
+  };
+}
 
 export function meetingScheduleSummary(
   interview: MeetingScheduleInterview | null | undefined,

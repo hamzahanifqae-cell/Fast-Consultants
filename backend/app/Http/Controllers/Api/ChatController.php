@@ -11,6 +11,7 @@ use App\Http\Requests\Api\SendWhatsAppChatMessageRequest;
 use App\Http\Requests\Api\SetChatTypingRequest;
 use App\Http\Requests\Api\StartChatRequest;
 use App\Http\Requests\Api\StartStaffChatRequest;
+use App\Http\Requests\Api\StartStudentChatRequest;
 use App\Models\ChatConversation;
 use App\Models\ChatConversationRead;
 use App\Models\ChatMessage;
@@ -73,7 +74,13 @@ class ChatController extends Controller
                 fn (Builder $query) => $query
                     ->where('kind', ChatConversation::KIND_STUDENT_DEPARTMENT)
                     ->where('student_id', $user->id),
-                fn (Builder $query) => $this->scopeVisibleToOrganization($query, $user),
+                fn (Builder $query) => $this->scopeVisibleToOrganization($query, $user)
+                    // Student threads only appear after a real message. Staff DMs should
+                    // still show as soon as a teammate is selected (even before first send).
+                    ->where(function (Builder $visible) {
+                        $visible->whereNotNull('last_message_at')
+                            ->orWhere('kind', ChatConversation::KIND_STAFF_DM);
+                    }),
             )
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
@@ -149,15 +156,36 @@ class ChatController extends Controller
         $department = $request->enum('department', StaffDepartment::class);
         $this->ensureStudentNotBlocked($student->id, $department);
 
-        $conversation = ChatConversation::query()->firstOrCreate(
-            [
-                'student_id' => $student->id,
-                'department' => $department,
-                'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
-            ],
-        );
+        // Only open an existing thread when no message is provided. Creating empty
+        // conversations would list the student in that department's staff inbox.
+        if (! $request->filled('message')) {
+            $existing = ChatConversation::query()
+                ->where('student_id', $student->id)
+                ->where('department', $department)
+                ->where('kind', ChatConversation::KIND_STUDENT_DEPARTMENT)
+                ->first();
 
-        if ($request->filled('message')) {
+            if (! $existing) {
+                return response()->json([
+                    'data' => [
+                        'conversation' => null,
+                        'department' => $department->value,
+                        'department_label' => $department->label(),
+                        'messages' => [],
+                    ],
+                ]);
+            }
+
+            $conversation = $existing;
+        } else {
+            $conversation = ChatConversation::query()->firstOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'department' => $department,
+                    'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
+                ],
+            );
+
             $this->storeMessage($conversation, $student->id, $request->string('message')->toString());
         }
 
@@ -180,7 +208,7 @@ class ChatController extends Controller
                     ->map(fn (ChatMessage $message) => $this->messagePayload($message, $student->id))
                     ->values(),
             ],
-        ], 201);
+        ], $request->filled('message') ? 201 : 200);
     }
 
     public function staffDirectory(Request $request): JsonResponse
@@ -188,28 +216,68 @@ class ChatController extends Controller
         $viewer = $request->user();
         abort_unless($viewer->isConsultant(), 403);
 
-        $staff = User::query()
+        $allowedDepartments = StaffDepartment::staffDirectoryDepartments();
+        $allowedValues = collect($allowedDepartments)
+            ->map(fn (StaffDepartment $department) => $department->value)
+            ->all();
+
+        $staffByDepartment = User::query()
+            ->where('id', '!=', $viewer->id)
+            ->whereIn('staff_department', $allowedValues)
+            ->whereHas('roles', function (Builder $roles) {
+                $roles->whereIn('name', [
+                    Role::Staff->value,
+                    Role::Admin->value,
+                    Role::Consultant->value,
+                    Role::SuperAdmin->value,
+                ]);
+            })
+            ->orderBy('id')
+            ->get(['id', 'name', 'email', 'phone', 'staff_department'])
+            ->groupBy(fn (User $user) => $user->staff_department?->value);
+
+        // When the viewer is the only person in a department (e.g. Leading),
+        // still offer a clickable peer — prefer Super Admin / Admin.
+        $fallbackPeer = User::query()
             ->where('id', '!=', $viewer->id)
             ->whereHas('roles', function (Builder $roles) {
                 $roles->whereIn('name', [
                     Role::SuperAdmin->value,
                     Role::Admin->value,
-                    Role::Staff->value,
                     Role::Consultant->value,
                 ]);
             })
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'phone', 'staff_department']);
+            ->orderBy('id')
+            ->get(['id', 'name', 'email', 'phone', 'staff_department'])
+            ->sortBy(function (User $user) {
+                if ($user->hasRole(Role::SuperAdmin->value)) {
+                    return 0;
+                }
+
+                if ($user->hasRole(Role::Admin->value)) {
+                    return 1;
+                }
+
+                return 2;
+            })
+            ->first();
 
         return response()->json([
-            'data' => $staff->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'staff_department' => $user->staff_department?->value,
-                'staff_department_label' => $user->staff_department?->label(),
-            ])->values(),
+            'data' => collect($allowedDepartments)
+                ->map(function (StaffDepartment $department) use ($staffByDepartment, $fallbackPeer) {
+                    $user = $staffByDepartment->get($department->value)?->first() ?? $fallbackPeer;
+
+                    return [
+                        'id' => $user?->id,
+                        'name' => $department->label(),
+                        'email' => $user?->email,
+                        'phone' => $user?->phone,
+                        'staff_department' => $department->value,
+                        'staff_department_label' => $department->label(),
+                        'available' => $user !== null,
+                    ];
+                })
+                ->values(),
         ]);
     }
 
@@ -254,6 +322,54 @@ class ChatController extends Controller
         ]);
         $conversation->unread_count = 0;
         $conversation->is_blocked = false;
+
+        return response()->json([
+            'data' => [
+                'conversation' => $this->conversationPayload($conversation, $viewer),
+                'messages' => $conversation->messages
+                    ->map(fn (ChatMessage $message) => $this->messagePayload($message, $viewer->id))
+                    ->values(),
+            ],
+        ], 201);
+    }
+
+    public function startStudent(StartStudentChatRequest $request): JsonResponse
+    {
+        $viewer = $request->user();
+        $student = User::query()->findOrFail((int) $request->integer('student_id'));
+
+        abort_unless($student->isStudent(), 422, 'Selected user is not a student.');
+
+        $department = $this->resolveBroadcastDepartment(
+            $viewer,
+            $request->filled('department') ? $request->string('department')->toString() : null,
+        );
+
+        $this->ensureStudentNotBlocked($student->id, $department);
+
+        $conversation = ChatConversation::query()->firstOrCreate(
+            [
+                'student_id' => $student->id,
+                'department' => $department,
+                'kind' => ChatConversation::KIND_STUDENT_DEPARTMENT,
+            ],
+        );
+
+        if ($request->filled('message')) {
+            $this->storeMessage($conversation, $viewer->id, $request->string('message')->toString());
+        }
+
+        $this->markConversationRead($conversation, $viewer);
+
+        $conversation->load([
+            'student:id,name,email',
+            'student.studentProfile:id,user_id,phone',
+            'consultant:id,name,email',
+            'latestMessage.sender:id,name',
+            'messages.sender:id,name',
+        ]);
+        $conversation->unread_count = 0;
+        $conversation->is_blocked = $this->isStudentBlocked($student->id, $department);
 
         return response()->json([
             'data' => [
@@ -439,7 +555,18 @@ class ChatController extends Controller
         $this->ensureCanAccess($request, $conversation);
 
         $viewer = $request->user();
-        $this->markConversationRead($conversation, $viewer);
+
+        // Super Admin / Admin see every department thread for a student. Opening one
+        // conversation should clear the whole student unread badge, not leave sibling threads sticky.
+        if (
+            ($viewer->isSuperAdmin() || $viewer->isAdmin())
+            && $conversation->kind === ChatConversation::KIND_STUDENT_DEPARTMENT
+            && $conversation->student_id
+        ) {
+            $this->markAllStudentConversationsRead((int) $conversation->student_id, $viewer);
+        } else {
+            $this->markConversationRead($conversation, $viewer);
+        }
 
         $conversation->load([
             'student:id,name,email',
@@ -1147,6 +1274,28 @@ class ChatController extends Controller
         abort_unless($conversation->consultant_id === $user->id, 403);
     }
 
+    private function markAllStudentConversationsRead(int $studentId, User $user): void
+    {
+        $conversations = ChatConversation::query()
+            ->where('kind', ChatConversation::KIND_STUDENT_DEPARTMENT)
+            ->where('student_id', $studentId)
+            ->get();
+
+        foreach ($conversations as $conversation) {
+            $this->markConversationRead($conversation, $user);
+        }
+
+        $conversationIds = $conversations->pluck('id');
+        if ($conversationIds->isNotEmpty()) {
+            UserNotification::query()
+                ->where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->where('type', 'chat_message')
+                ->whereIn('conversation_id', $conversationIds)
+                ->update(['read_at' => now()]);
+        }
+    }
+
     private function markConversationRead(ChatConversation $conversation, User $user): void
     {
         $latestMessageAt = $conversation->messages()->max('created_at');
@@ -1154,11 +1303,11 @@ class ChatController extends Controller
 
         if ($latestMessageAt !== null) {
             $latest = \Illuminate\Support\Carbon::parse($latestMessageAt);
-            // Keep last_read_at at/after every existing message so second-precision
-            // comparisons never leave opened threads looking unread.
-            if ($latest->greaterThanOrEqualTo($readAt)) {
-                $readAt = $latest->copy()->addSecond();
+            if ($latest->greaterThan($readAt)) {
+                $readAt = $latest->copy();
             }
+            // Always strictly after the newest message so ">" unread checks stay clear.
+            $readAt = $readAt->copy()->addSecond();
         }
 
         ChatConversationRead::query()->updateOrCreate(

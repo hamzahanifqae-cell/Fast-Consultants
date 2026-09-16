@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'city',
     'description',
     'is_visible_to_students',
+    'listed_in_catalog',
 ])]
 class University extends Model
 {
@@ -25,6 +26,7 @@ class University extends Model
     {
         return [
             'is_visible_to_students' => 'boolean',
+            'listed_in_catalog' => 'boolean',
         ];
     }
 

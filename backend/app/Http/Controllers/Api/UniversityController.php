@@ -30,6 +30,7 @@ class UniversityController extends Controller
     public function consultantIndex(Request $request): AnonymousResourceCollection
     {
         $universities = University::query()
+            ->where('listed_in_catalog', true)
             ->with(['requiredDocuments', 'consultant:id,name,email'])
             ->latest()
             ->get();
@@ -43,7 +44,6 @@ class UniversityController extends Controller
 
         $assigned = $student->assignedUniversities()
             ->with(['requiredDocuments', 'consultant:id,name,email'])
-            ->where('is_visible_to_students', true)
             ->latest('student_university.created_at')
             ->get();
 
@@ -66,6 +66,7 @@ class UniversityController extends Controller
         $country = $validated['country'];
 
         $catalog = University::query()
+            ->where('listed_in_catalog', true)
             ->where('is_visible_to_students', true)
             ->where('country', $country)
             ->orderBy('name')
@@ -170,7 +171,6 @@ class UniversityController extends Controller
 
         $assigned = $student->assignedUniversities()
             ->with(['requiredDocuments', 'consultant:id,name,email'])
-            ->where('is_visible_to_students', true)
             ->latest('student_university.created_at')
             ->get();
 
@@ -195,7 +195,7 @@ class UniversityController extends Controller
 
     public function store(StoreUniversityRequest $request): JsonResponse
     {
-        $university = DB::transaction(function () use ($request) {
+            $university = DB::transaction(function () use ($request) {
             $university = University::query()->create([
                 'consultant_id' => $request->user()->id,
                 'name' => $request->string('name')->toString(),
@@ -203,6 +203,7 @@ class UniversityController extends Controller
                 'city' => $request->input('city'),
                 'description' => $request->input('description'),
                 'is_visible_to_students' => $request->boolean('is_visible_to_students', true),
+                'listed_in_catalog' => true,
             ]);
 
             $this->syncRequiredDocuments($university, $request->input('required_documents', []));

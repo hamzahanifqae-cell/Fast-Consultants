@@ -197,7 +197,7 @@ class ConsultantStudentDocumentController extends Controller
 
         $student = $document->user;
         $beforeApplication = $this->applications->forStudent($student);
-        $beforePreparationUnlockedAt = $beforeApplication->preparation_unlocked_at;
+        $beforeInterviewUnlockedAt = $beforeApplication->interview_unlocked_at;
 
         $document->update([
             'status' => $status,
@@ -228,13 +228,13 @@ class ConsultantStudentDocumentController extends Controller
 
         $afterApplication = $this->applications->forStudent($document->user);
 
-        if ($beforePreparationUnlockedAt === null && $afterApplication->preparation_unlocked_at !== null) {
+        if ($beforeInterviewUnlockedAt === null && $afterApplication->interview_unlocked_at !== null) {
             $this->notifications->createForStudent(
                 $document->user,
                 $request->user(),
-                'Preparation is now unlocked. Check your "Preparation" screen.',
-                'preparation_unlocked',
-                '/student-preparation',
+                'Interview is now available. Open your Interview screen — staff will schedule your session.',
+                'interview_unlocked',
+                '/student-interview',
             );
         }
 

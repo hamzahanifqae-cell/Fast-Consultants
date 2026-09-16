@@ -1,4 +1,4 @@
-import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
@@ -14,6 +14,7 @@ import { AuthBackground } from '@/components/auth-background';
 import { BrandLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ThemedText } from '@/components/themed-text';
+import { AppButton } from '@/components/ui/app-button';
 import { Brand } from '@/constants/theme';
 import { useAuthStatusBar } from '@/hooks/use-auth-status-bar';
 import { useAuthTopInset } from '@/hooks/use-auth-top-inset';
@@ -24,6 +25,11 @@ import { api, getApiErrorMessage } from '@/lib/api';
 import { type LoginPortal, portalMatchesUser } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthResponse } from '@/types/auth';
+
+type ApprovalError = {
+  message?: string;
+  approval_status?: 'pending' | 'rejected' | string;
+};
 
 function parsePortal(value: string | string[] | undefined): LoginPortal {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -47,6 +53,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'rejected' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const keyboardInset = useKeyboardBottomInset();
   const keyboardVisible = keyboardInset > 40;
@@ -68,6 +75,7 @@ export default function LoginScreen() {
 
   async function onSubmit() {
     setError(null);
+    setApprovalStatus(null);
     setSubmitting(true);
 
     try {
@@ -86,6 +94,14 @@ export default function LoginScreen() {
       await setSession(data.token, data.user);
       router.replace('/home');
     } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 403 && isStudent) {
+        const data = err.response.data as ApprovalError | undefined;
+        if (data?.approval_status === 'pending' || data?.approval_status === 'rejected') {
+          setApprovalStatus(data.approval_status);
+          setError(data.message ?? getApiErrorMessage(err, 'Could not sign in.'));
+          return;
+        }
+      }
       setError(getApiErrorMessage(err, 'Could not sign in.'));
     } finally {
       setSubmitting(false);
@@ -195,7 +211,21 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
-            {error ? (
+            {approvalStatus === 'pending' ? (
+              <View style={[styles.approvalBanner, styles.approvalPending]}>
+                <Text style={styles.approvalTitle}>Pending approval</Text>
+                <Text style={styles.approvalBody}>{error}</Text>
+              </View>
+            ) : null}
+
+            {approvalStatus === 'rejected' ? (
+              <View style={[styles.approvalBanner, styles.approvalRejected]}>
+                <Text style={styles.approvalTitle}>Rejected</Text>
+                <Text style={styles.approvalBody}>{error}</Text>
+              </View>
+            ) : null}
+
+            {error && !approvalStatus ? (
               <ThemedText type="small" themeColor="danger" style={styles.error}>
                 {error}
               </ThemedText>
@@ -207,24 +237,12 @@ export default function LoginScreen() {
               </ThemedText>
             ) : null}
 
-            {/* CTA sits directly under password (8px gap) — never in a flex spacer */}
-            <Pressable
+            <AppButton
               accessibilityLabel="Sign In"
-              accessibilityRole="button"
               disabled={submitting}
+              label={submitting ? 'Signing in…' : 'Sign In'}
               onPress={() => void onSubmit()}
-              style={({ pressed }) => [
-                styles.ctaWrap,
-                { opacity: submitting ? 0.55 : pressed ? 0.9 : 1 },
-              ]}>
-              <LinearGradient
-                colors={[...Brand.buttonGradient]}
-                end={{ x: 1, y: 1 }}
-                start={{ x: 0, y: 0 }}
-                style={styles.cta}>
-                <Text style={styles.ctaLabel}>{submitting ? 'Signing in…' : 'Sign In'}</Text>
-              </LinearGradient>
-            </Pressable>
+            />
 
             {!keyboardVisible ? (
               <View style={styles.themeBlock}>
@@ -339,26 +357,33 @@ const styles = StyleSheet.create({
   error: {
     textAlign: 'center',
   },
+  approvalBanner: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  approvalPending: {
+    backgroundColor: 'rgba(245, 185, 66, 0.18)',
+  },
+  approvalRejected: {
+    backgroundColor: 'rgba(220, 60, 80, 0.12)',
+  },
+  approvalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Brand.ink,
+  },
+  approvalBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Brand.ink,
+    opacity: 0.85,
+  },
   forgot: {
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
-  },
-  ctaWrap: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 0,
-  },
-  cta: {
-    minHeight: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaLabel: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
   },
   themeBlock: {
     marginTop: 4,

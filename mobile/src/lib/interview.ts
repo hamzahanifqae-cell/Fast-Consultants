@@ -31,7 +31,7 @@ export function isInterviewMeetingCancelled(
   return interview?.status === 'cancelled' && !interview.at;
 }
 
-type MeetingScheduleInterview = {
+export type MeetingScheduleInterview = {
   status?: string | null;
   at?: string | null;
   mode?: string | null;
@@ -39,6 +39,59 @@ type MeetingScheduleInterview = {
   meeting_ended_at?: string | null;
   followup_preference?: 'want_another' | 'decline_another' | null;
 };
+
+export function interviewStatusPillLabel(
+  interview: MeetingScheduleInterview | null | undefined,
+): string {
+  if (isInterviewMeetingCancelled(interview)) return 'Cancelled';
+  if (interview?.at) return 'Scheduled';
+  if (isInterviewJourneyComplete(interview)) return 'Complete';
+  if (interview?.followup_preference === 'want_another') return 'Another requested';
+  if (interview?.meeting_ended_at) return 'Follow-up needed';
+  return 'Waiting';
+}
+
+export function isInterviewJourneyComplete(
+  interview: MeetingScheduleInterview | null | undefined,
+): boolean {
+  if (!interview) return false;
+  if (isInterviewMeetingCancelled(interview)) return false;
+  if (
+    interview.status === 'completed' ||
+    interview.status === 'passed' ||
+    interview.status === 'failed'
+  ) {
+    return true;
+  }
+  return (
+    Boolean(interview.meeting_ended_at) && interview.followup_preference === 'decline_another'
+  );
+}
+
+export function interviewProgressPercent(
+  interviewAvailable: boolean,
+  interview: MeetingScheduleInterview | null | undefined,
+): { percent: number; complete: boolean } {
+  if (!interviewAvailable) {
+    return { percent: 0, complete: false };
+  }
+  if (isInterviewJourneyComplete(interview)) {
+    return { percent: 100, complete: true };
+  }
+  if (isInterviewMeetingCancelled(interview)) {
+    return { percent: 55, complete: false };
+  }
+  if (interview?.at) {
+    return { percent: 85, complete: false };
+  }
+  if (interview?.followup_preference === 'want_another') {
+    return { percent: 68, complete: false };
+  }
+  if (interview?.meeting_ended_at && !interview.followup_preference) {
+    return { percent: 72, complete: false };
+  }
+  return { percent: 40, complete: false };
+}
 
 export function meetingScheduleSummary(
   interview: MeetingScheduleInterview | null | undefined,

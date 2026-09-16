@@ -14,13 +14,30 @@ enum StaffDepartment: string
     public function label(): string
     {
         return match ($this) {
-            self::Universities => 'Universities Related',
-            self::Finance => 'A/C & Finance',
+            self::Universities => 'Universities',
+            self::Finance => 'Finance',
             self::StudentInfo => 'Student Info Collector',
-            self::Visa => 'File Making Related',
+            self::Visa => 'File Making',
             self::Interview => 'Interview',
-            self::Leads => 'Leads / Admissions',
+            self::Leads => 'Leading',
         };
+    }
+
+    /**
+     * Departments shown in the internal staff-to-staff directory.
+     *
+     * @return list<self>
+     */
+    public static function staffDirectoryDepartments(): array
+    {
+        return [
+            self::StudentInfo,
+            self::Universities,
+            self::Finance,
+            self::Leads,
+            self::Interview,
+            self::Visa,
+        ];
     }
 
     public function viewPermission(): Permission
@@ -85,6 +102,6 @@ enum StaffDepartment: string
     /** Whether students can open a chat with this department. */
     public function acceptsStudentChat(): bool
     {
-        return $this !== self::Leads;
+        return true;
     }
 }

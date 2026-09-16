@@ -30,6 +30,14 @@ class UserResource extends JsonResource
             'is_staff' => $this->isStaff(),
             'is_student' => $this->isStudent(),
             'is_organization' => $this->isConsultant(),
+            'account_approval_status' => $this->when(
+                $this->isStudent(),
+                $this->accountApprovalStatus()->value,
+            ),
+            'account_approval_status_label' => $this->when(
+                $this->isStudent(),
+                $this->accountApprovalStatus()->label(),
+            ),
         ];
     }
 }

@@ -1,3 +1,4 @@
+import { interviewProgressPercent } from '@/lib/interview';
 import { areDocumentsJourneyComplete } from '@/lib/student-journey-progress';
 import type {
   ApplicationStatusResponse,
@@ -249,59 +250,32 @@ export function interviewSectionProgress(
   if (!status) {
     return {
       percent: 0,
-      report: 'Prep, Meeting, Follow-up',
+      report: 'Meeting, Follow-up',
       complete: false,
       meta: 'Interview',
       actionLabel: 'Continue',
     };
   }
 
-  if (!status.preparation_available) {
+  if (!status.interview_available) {
     return {
       percent: 0,
-      report: 'Locked, Prep, Meeting',
+      report: 'Locked, Meeting',
       complete: false,
       meta: 'Locked',
       actionLabel: 'Locked',
     };
   }
 
-  const prepDone = Boolean(status.application.preparation.completed_at);
   const interview = status.application.interview;
-  const meetingDone = Boolean(interview.meeting_ended_at);
-  const scheduled = Boolean(interview.at);
-  const declined = interview.followup_preference === 'decline_another';
-  const wantsAnother = interview.followup_preference === 'want_another';
-  const interviewComplete =
-    interview.status === 'completed' ||
-    interview.status === 'passed' ||
-    interview.status === 'failed' ||
-    (meetingDone && declined);
-
-  const prepPct = prepDone ? 100 : 0;
-  const meetingPct = interviewComplete || meetingDone ? 100 : scheduled ? 70 : status.interview_available ? 40 : 0;
-  const followPct = interviewComplete
-    ? 100
-    : wantsAnother
-      ? 50
-      : meetingDone && !interview.followup_preference
-        ? 25
-        : meetingDone
-          ? 75
-          : 0;
-
-  const percent = Math.round((prepPct + meetingPct + followPct) / 3);
+  const { percent, complete } = interviewProgressPercent(status.interview_available, interview);
 
   return {
     percent,
-    complete: interviewComplete,
-    report: `Prep ${prepPct}%, Meeting ${meetingPct}%, Follow-up ${followPct}%`,
-    meta: interviewComplete
-      ? 'Interview complete'
-      : status.interview_available
-        ? 'Interview open'
-        : 'Preparation',
-    actionLabel: interviewComplete ? 'Review' : 'Continue',
+    complete,
+    report: complete ? 'Interview complete' : 'Meeting in progress',
+    meta: complete ? 'Interview complete' : 'Interview open',
+    actionLabel: complete ? 'Review' : 'Continue',
   };
 }
 
@@ -360,7 +334,6 @@ export function statusSectionProgress(
   const steps = [
     { label: 'Docs', done: areDocumentsJourneyComplete(status) },
     { label: 'Fees', done: status.checklist.charge_receipts.accepted },
-    { label: 'Prep', done: Boolean(status.application.preparation.completed_at) },
     { label: 'Interview', done: interviewDone || Boolean(interview.at) },
     {
       label: 'File Making',

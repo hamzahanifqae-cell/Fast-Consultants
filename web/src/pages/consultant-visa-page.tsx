@@ -25,8 +25,6 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
     focus === 'interview' ? 'Interview' : focus === 'visa' ? 'File Making' : 'File Making & Interview';
 
   const { studentId, selected, selectStudent, clearStudent } = useDepartmentStudentParam();
-  const [prepTitle, setPrepTitle] = useState('');
-  const [prepBody, setPrepBody] = useState('');
   const [interviewAt, setInterviewAt] = useState('');
   const [interviewMode, setInterviewMode] = useState('Online');
   const [interviewLocation, setInterviewLocation] = useState('');
@@ -67,9 +65,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
 
   useEffect(() => {
     const application = applicationQuery.data;
-    if (!application?.preparation || !application.interview) return;
-    setPrepTitle(application.preparation.title ?? 'Interview preparation');
-    setPrepBody(application.preparation.body ?? '');
+    if (!application?.interview) return;
     setInterviewAt(toDateTimeLocalValue(application.interview.at));
     setInterviewMode(application.interview.mode ?? 'Online');
     setInterviewLocation(application.interview.location ?? '');
@@ -80,8 +76,6 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
     mutationFn: async () => {
       if (!studentId) throw new Error('Select a student.');
       const payload: Record<string, unknown> = {
-        preparation_title: prepTitle.trim() || undefined,
-        preparation_body: prepBody.trim() || undefined,
         unlock_interview: true,
         interview_mode: interviewMode.trim() || null,
         interview_location: interviewLocation.trim() || null,
@@ -191,14 +185,6 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                   </p>
                   {interviewLock ? <p className="handoff-lock">{interviewLock}</p> : null}
                   <label className="field">
-                    <span>Preparation title</span>
-                    <input value={prepTitle} onChange={(event) => setPrepTitle(event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>Preparation notes</span>
-                    <input value={prepBody} onChange={(event) => setPrepBody(event.target.value)} />
-                  </label>
-                  <label className="field">
                     <span>Interview time</span>
                     <input
                       type="datetime-local"
@@ -240,7 +226,7 @@ export function ConsultantVisaPage({ focus = 'all' }: ConsultantVisaPageProps) {
                       Boolean(interviewLock) ||
                       !interviewAt.trim()
                     }>
-                    Unlock / update interview
+                    {updateApplication.isPending ? 'Saving…' : 'Schedule interview'}
                   </button>
                 </form>
               ) : null}

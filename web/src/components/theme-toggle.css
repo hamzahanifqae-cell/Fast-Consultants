@@ -44,6 +44,15 @@
   color: var(--ink);
 }
 
+.theme-toggle.on-dark .theme-toggle-chip:hover {
+  color: #ffffff;
+}
+
+.theme-toggle-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .theme-toggle-chip.active {
   background: var(--accent-strong);
   color: #ffffff;

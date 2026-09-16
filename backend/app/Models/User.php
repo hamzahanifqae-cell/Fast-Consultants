@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountApprovalStatus;
 use App\Enums\Permission;
 use App\Enums\Role;
 use App\Enums\StaffDepartment;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -17,7 +19,17 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'staff_department'])]
+#[Fillable([
+    'name',
+    'email',
+    'phone',
+    'password',
+    'staff_department',
+    'account_approval_status',
+    'account_approved_at',
+    'account_reviewed_by',
+    'account_rejection_reason',
+])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -33,6 +45,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'staff_department' => StaffDepartment::class,
+            'account_approval_status' => AccountApprovalStatus::class,
+            'account_approved_at' => 'datetime',
         ];
     }
 
@@ -50,6 +64,14 @@ class User extends Authenticatable
     public function studentProfile(): HasOne
     {
         return $this->hasOne(StudentProfile::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function accountReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'account_reviewed_by');
     }
 
     /**
@@ -99,6 +121,20 @@ class User extends Authenticatable
     public function isStudent(): bool
     {
         return $this->hasRole(Role::Student);
+    }
+
+    public function accountApprovalStatus(): AccountApprovalStatus
+    {
+        return $this->account_approval_status ?? AccountApprovalStatus::Approved;
+    }
+
+    public function canSignIn(): bool
+    {
+        if (! $this->isStudent()) {
+            return true;
+        }
+
+        return $this->accountApprovalStatus() === AccountApprovalStatus::Approved;
     }
 
     public function isSuperAdmin(): bool

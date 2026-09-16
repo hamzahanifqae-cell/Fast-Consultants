@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountApprovalStatus;
+use App\Enums\Role;
+use App\Enums\StaffDepartment;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -19,7 +23,7 @@ class AuthTest extends TestCase
         $this->seed(RoleSeeder::class);
     }
 
-    public function test_a_student_can_register(): void
+    public function test_a_student_can_register_and_waits_for_approval(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Sara Student',
@@ -33,24 +37,112 @@ class AuthTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('user.email', 'sara@example.com')
             ->assertJsonPath('user.roles.0', 'student')
-            ->assertJsonStructure(['token', 'user' => ['id', 'name', 'email', 'roles']]);
+            ->assertJsonPath('approval_status', 'pending')
+            ->assertJsonMissingPath('token');
 
-        $this->assertDatabaseHas('users', ['email' => 'sara@example.com']);
+        $this->assertDatabaseHas('users', [
+            'email' => 'sara@example.com',
+            'account_approval_status' => AccountApprovalStatus::Pending->value,
+        ]);
     }
 
-    public function test_a_consultant_can_register(): void
+    public function test_consultant_cannot_self_register(): void
     {
-        $response = $this->postJson('/api/register', [
+        $this->postJson('/api/register', [
             'name' => 'Chris Consultant',
             'email' => 'chris@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'account_type' => 'consultant',
+        ])->assertUnprocessable();
+    }
+
+    public function test_pending_student_cannot_login(): void
+    {
+        $user = User::factory()->student()->create([
+            'email' => 'sara@example.com',
+            'account_approval_status' => AccountApprovalStatus::Pending,
+            'account_approved_at' => null,
         ]);
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('user.roles.0', 'consultant');
+        $this->postJson('/api/login', [
+            'email' => 'sara@example.com',
+            'password' => 'password',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('approval_status', 'pending');
+
+        $this->assertNotNull($user);
+    }
+
+    public function test_rejected_student_cannot_login(): void
+    {
+        User::factory()->student()->create([
+            'email' => 'sara@example.com',
+            'account_approval_status' => AccountApprovalStatus::Rejected,
+            'account_approved_at' => null,
+            'account_rejection_reason' => 'Incomplete details',
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'sara@example.com',
+            'password' => 'password',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('approval_status', 'rejected')
+            ->assertJsonPath('rejection_reason', 'Incomplete details');
+    }
+
+    public function test_leads_staff_can_approve_pending_account(): void
+    {
+        $student = User::factory()->student()->create([
+            'email' => 'sara@example.com',
+            'account_approval_status' => AccountApprovalStatus::Pending,
+            'account_approved_at' => null,
+        ]);
+        $staff = $this->makeLeadsStaff();
+
+        Sanctum::actingAs($staff);
+
+        $this->postJson("/api/consultant/account-requests/{$student->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.account_approval_status', 'approved');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $student->id,
+            'account_approval_status' => AccountApprovalStatus::Approved->value,
+            'account_reviewed_by' => $staff->id,
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'sara@example.com',
+            'password' => 'password',
+        ])->assertOk()->assertJsonStructure(['token', 'user']);
+    }
+
+    public function test_leads_staff_can_reject_pending_account(): void
+    {
+        $student = User::factory()->student()->create([
+            'email' => 'sara@example.com',
+            'account_approval_status' => AccountApprovalStatus::Pending,
+            'account_approved_at' => null,
+        ]);
+        $staff = $this->makeLeadsStaff();
+
+        Sanctum::actingAs($staff);
+
+        $this->postJson("/api/consultant/account-requests/{$student->id}/reject", [
+            'reason' => 'Please use the enquiry form first.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.account_approval_status', 'rejected');
+
+        $this->postJson('/api/login', [
+            'email' => 'sara@example.com',
+            'password' => 'password',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('approval_status', 'rejected');
     }
 
     public function test_a_user_can_login_and_view_their_profile(): void
@@ -112,5 +204,20 @@ class AuthTest extends TestCase
         $this->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('user.email', $user->email);
+    }
+
+    private function makeLeadsStaff(): User
+    {
+        $user = User::factory()->create([
+            'email' => 'leads@example.com',
+            'password' => Hash::make('password'),
+            'staff_department' => StaffDepartment::Leads,
+        ]);
+        $user->assignRole(Role::Staff);
+        $user->syncPermissions(
+            collect(StaffDepartment::Leads->defaultPermissions())->map->value->all(),
+        );
+
+        return $user->fresh();
     }
 }

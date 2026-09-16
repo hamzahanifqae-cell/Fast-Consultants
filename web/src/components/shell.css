@@ -202,7 +202,7 @@
   text-overflow: ellipsis;
 }
 
-.ghost-btn {
+.shell-sidebar .ghost-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -220,12 +220,12 @@
     box-shadow 0.18s ease;
 }
 
-.ghost-btn:hover {
+.shell-sidebar .ghost-btn:hover {
   background: rgba(255, 255, 255, 0.14);
   transform: translateY(-1px);
 }
 
-.ghost-btn:active {
+.shell-sidebar .ghost-btn:active {
   transform: translateY(1px) scale(0.98);
 }
 

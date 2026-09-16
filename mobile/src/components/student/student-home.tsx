@@ -149,7 +149,6 @@ export function StudentHome({ user, token, onLogout }: Props) {
   );
   const profileComplete = profileProgress.complete;
 
-  const prepOpen = Boolean(statusQuery.data?.preparation_available);
   const interviewOpen = Boolean(statusQuery.data?.interview_available);
 
   async function onRefresh() {
@@ -279,8 +278,8 @@ export function StudentHome({ user, token, onLogout }: Props) {
                   ? 'Loading interview progress…'
                   : interviewProgress.report,
                 meta: interviewProgress.meta,
-                color: prepOpen || interviewOpen ? theme.cardCoral : '#E8E8EA',
-                glyph: prepOpen || interviewOpen ? '🗓️' : '🔒',
+                color: interviewOpen ? theme.cardCoral : '#E8E8EA',
+                glyph: interviewOpen ? '🗓️' : '🔒',
                 progressPercent: statusQuery.isLoading ? 0 : interviewProgress.percent,
                 actionLabel: interviewProgress.actionLabel,
                 onPress: () => router.push('/student-interview'),

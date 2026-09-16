@@ -63,7 +63,13 @@ class UniversitySuggestionTest extends TestCase
         $this->assertDatabaseHas('universities', [
             'name' => $list->json('data.0.name'),
             'country' => 'Canada',
+            'listed_in_catalog' => false,
         ]);
+
+        Sanctum::actingAs($staff);
+        $this->getJson('/api/consultant/universities')
+            ->assertOk()
+            ->assertJsonMissing(['name' => $list->json('data.0.name')]);
 
         $this->assertDatabaseHas('student_university', [
             'student_id' => $student->id,

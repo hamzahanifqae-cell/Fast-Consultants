@@ -1,14 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Redirect, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { InterviewMeetingSection } from '@/components/interview-meeting-section';
+import { AppButton } from '@/components/ui/app-button';
 import { StudentScreen, StudentSurface } from '@/components/student/student-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { api, getApiErrorMessage } from '@/lib/api';
-import { isInterviewMeetingCancelled, isOnlineInterviewMode, meetingScheduleSummary } from '@/lib/interview';
+import {
+  interviewStatusPillLabel,
+  isInterviewMeetingCancelled,
+  isOnlineInterviewMode,
+  meetingScheduleSummary,
+} from '@/lib/interview';
 import { syncInterviewLocalReminders } from '@/lib/interview-reminders';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApplicationStatusResponse } from '@/types/auth';
@@ -18,7 +24,6 @@ export default function StudentInterviewScreen() {
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const isStudent = user?.roles.includes('student') ?? false;
-  const [error, setError] = useState<string | null>(null);
 
   const statusQuery = useQuery({
     queryKey: ['student-application-status'],
@@ -28,22 +33,6 @@ export default function StudentInterviewScreen() {
         '/student/application-status',
       );
       return data.data;
-    },
-  });
-
-  const completePrep = useMutation({
-    mutationFn: async () => {
-      const { data } = await api.post<{ data: ApplicationStatusResponse }>(
-        '/student/application/complete-preparation',
-      );
-      return data.data;
-    },
-    onSuccess: async () => {
-      setError(null);
-      await queryClient.invalidateQueries({ queryKey: ['student-application-status'] });
-    },
-    onError: (err) => {
-      setError(getApiErrorMessage(err, 'Could not mark preparation complete.'));
     },
   });
 
@@ -62,11 +51,9 @@ export default function StudentInterviewScreen() {
   });
 
   const status = statusQuery.data;
-  const preparation = status?.application.preparation;
   const interview = status?.application.interview;
   const online = isOnlineInterviewMode(interview?.mode);
   const meetingCancelled = isInterviewMeetingCancelled(interview);
-  const prepLocked = Boolean(status && !status.preparation_available);
   const interviewLocked = Boolean(status && !status.interview_available);
   const showFollowupChoice =
     Boolean(interview?.unlocked_at) &&
@@ -92,72 +79,24 @@ export default function StudentInterviewScreen() {
   }
 
   return (
-    <StudentScreen
-      showBack
-      title="Interview">
+    <StudentScreen showBack title="Interview">
       {statusQuery.isLoading ? <ActivityIndicator color={Brand.primary} /> : null}
 
       {status ? (
         <StudentSurface style={styles.stack}>
-          <ThemedText type="section" themeColor="textSecondary">
-            Preparation notes
-          </ThemedText>
-
-          {prepLocked ? (
+          {interviewLocked ? (
             <>
               <ThemedText type="small" themeColor="textSecondary">
-                Preparation unlocks after your documents and charge slips are accepted.
+                Interview unlocks after your documents and charge slips are accepted.
               </ThemedText>
-              <Pressable onPress={() => router.push('/student-status')} style={styles.button}>
-                <ThemedText type="smallBold" style={styles.buttonText}>
-                  View my status
-                </ThemedText>
-              </Pressable>
+              <AppButton label="View my status" onPress={() => router.push('/student-status')} />
             </>
-          ) : (
-            <>
-              <ThemedText type="subtitle">
-                {preparation?.title ?? 'Interview preparation'}
-              </ThemedText>
-              <ThemedText type="small">
-                {preparation?.body?.trim()
-                  ? preparation.body
-                  : 'Staff have unlocked preparation. Review any notes here, then mark complete when you are ready.'}
-              </ThemedText>
-
-              {preparation?.completed_at ? (
-                <ThemedText type="small" style={styles.success}>
-                  Preparation marked complete.
-                </ThemedText>
-              ) : (
-                <Pressable
-                  disabled={completePrep.isPending}
-                  onPress={() => completePrep.mutate()}
-                  style={[styles.button, { opacity: completePrep.isPending ? 0.6 : 1 }]}>
-                  <ThemedText type="smallBold" style={styles.buttonText}>
-                    {completePrep.isPending ? 'Saving…' : 'Mark preparation complete'}
-                  </ThemedText>
-                </Pressable>
-              )}
-
-              {error ? (
-                <ThemedText type="small" style={styles.error}>
-                  {error}
-                </ThemedText>
-              ) : null}
-            </>
-          )}
-
-          <ThemedText type="section" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
-            Interview meeting
-          </ThemedText>
-
-          {interviewLocked ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              The meeting timer and video unlock after staff schedule your interview.
-            </ThemedText>
           ) : interview ? (
             <>
+              <View style={styles.statusRow}>
+                <ThemedText type="smallBold">{interviewStatusPillLabel(interview)}</ThemedText>
+              </View>
+
               <ThemedText type="smallBold">Status</ThemedText>
               <ThemedText type="small">{meetingSummary.value}</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
@@ -180,12 +119,15 @@ export default function StudentInterviewScreen() {
                 <>
                   <ThemedText type="smallBold">Mode</ThemedText>
                   <ThemedText type="small">{interview.mode}</ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {online ? 'Join from this page when the timer opens' : 'Attend in person'}
+                  </ThemedText>
                 </>
               ) : null}
 
               {interview.notes ? (
                 <>
-                  <ThemedText type="smallBold">Notes</ThemedText>
+                  <ThemedText type="smallBold">Notes from staff</ThemedText>
                   <ThemedText type="small">{interview.notes}</ThemedText>
                 </>
               ) : null}
@@ -201,63 +143,40 @@ export default function StudentInterviewScreen() {
                       {getApiErrorMessage(followupPreference.error, 'Could not save your choice.')}
                     </ThemedText>
                   ) : null}
-                  <Pressable
+                  <AppButton
                     disabled={followupPreference.isPending}
+                    label={
+                      followupPreference.isPending
+                        ? 'Saving…'
+                        : 'Yes, schedule another meeting'
+                    }
                     onPress={() => followupPreference.mutate('want_another')}
-                    style={[styles.button, { opacity: followupPreference.isPending ? 0.6 : 1 }]}>
-                    <ThemedText type="smallBold" style={styles.buttonText}>
-                      {followupPreference.isPending ? 'Saving…' : 'Yes, schedule another meeting'}
-                    </ThemedText>
-                  </Pressable>
-                  <Pressable
+                  />
+                  <AppButton
                     disabled={followupPreference.isPending}
+                    label="No, I don’t need another meeting"
                     onPress={() => followupPreference.mutate('decline_another')}
-                    style={[
-                      styles.secondaryButton,
-                      { opacity: followupPreference.isPending ? 0.6 : 1 },
-                    ]}>
-                    <ThemedText type="smallBold">No, I don’t need another meeting</ThemedText>
-                  </Pressable>
+                    variant="ghost"
+                  />
                 </View>
               ) : null}
 
               {!interview.at &&
               !meetingCancelled &&
-              interview.followup_preference === 'want_another' ? (
-                <View style={styles.followupCard}>
-                  <ThemedText type="smallBold">Requested another meeting</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Staff can see your request and will schedule the next session.
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {!interview.at &&
-              !meetingCancelled &&
-              interview.followup_preference === 'decline_another' ? (
-                <View style={styles.followupCard}>
-                  <ThemedText type="smallBold">No further meeting requested</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    You told staff you don’t need another meeting right now.
-                  </ThemedText>
-                </View>
+              !showFollowupChoice &&
+              !interview.followup_preference ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  No meeting is scheduled yet. Staff will set your session time.
+                </ThemedText>
               ) : null}
 
               {interview.at ? (
-                <InterviewMeetingSection
-                  enabled
-                  interviewMode={interview.mode}
-                  role="student"
-                />
-              ) : !meetingCancelled && !showFollowupChoice && !interview.followup_preference ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  No meeting is scheduled right now. Staff will set the next session time.
-                </ThemedText>
+                <InterviewMeetingSection enabled interviewMode={interview.mode} role="student" />
               ) : null}
 
               {!online && interview.location ? (
                 <>
-                  <ThemedText type="smallBold">In-person location</ThemedText>
+                  <ThemedText type="smallBold">Location</ThemedText>
                   <ThemedText type="small">{interview.location}</ThemedText>
                 </>
               ) : null}
@@ -277,6 +196,13 @@ export default function StudentInterviewScreen() {
 
 const styles = StyleSheet.create({
   stack: { gap: Spacing.two },
+  statusRow: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: Brand.primarySoft,
+  },
   cancelledBanner: {
     borderRadius: 18,
     padding: Spacing.three,
@@ -291,22 +217,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F4F7',
     gap: Spacing.two,
   },
-  button: {
-    backgroundColor: Brand.primary,
-    borderRadius: 999,
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  buttonText: { color: '#fff' },
-  secondaryButton: {
-    borderRadius: 999,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#D0D5DD',
-    backgroundColor: '#fff',
-  },
-  success: { color: Brand.success },
   error: { color: '#D92D20' },
   linkWrap: { marginTop: Spacing.two },
   link: { color: Brand.primary },

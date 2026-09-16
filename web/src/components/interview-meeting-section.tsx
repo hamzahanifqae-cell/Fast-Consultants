@@ -53,7 +53,7 @@ export function InterviewMeetingSection({
         <div className="panel interview-video-card">
           <h3 style={{ marginTop: 0 }}>In-app video call</h3>
           <p className="muted">
-            Join here for interview preparation. The alarm stops once both student and staff have started
+            Join here for your interview. The alarm stops once both student and staff have started
             the call.
           </p>
           <InterviewVideoCall

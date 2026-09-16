@@ -67,7 +67,10 @@ final class NotificationSection
             return self::MESSAGES;
         }
 
-        if (str_starts_with($type, 'lead_') || str_contains($action, '/leads')) {
+        if (str_starts_with($type, 'lead_')
+            || str_starts_with($type, 'account_registration')
+            || str_contains($action, '/leads')
+        ) {
             return self::LEADS;
         }
 

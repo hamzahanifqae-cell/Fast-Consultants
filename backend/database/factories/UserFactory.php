@@ -31,6 +31,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'account_approval_status' => \App\Enums\AccountApprovalStatus::Approved,
+            'account_approved_at' => now(),
         ];
     }
 

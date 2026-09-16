@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { PageEmpty } from '@/components/page-fill';
+import { DirectoryList } from '@/components/directory-list';
 import { SearchableSelect } from '@/components/searchable-select';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
@@ -185,50 +185,41 @@ export function OrganizationTeamPage() {
       title="Team & permissions">
       <div className="page-stack">
         <div className="org-layout">
-          <section className="panel">
-            <h2>Team members</h2>
-            <p>Admin and Staff only, Super Admin is never listed for lower roles.</p>
-            <div className="stack-list">
-              {(usersQuery.data ?? []).map((member) => (
-                <div key={member.id} className="stack-item org-member">
-                  <div>
-                    <strong>{member.name}</strong>
-                    <span>{member.email}</span>
-                    {member.phone ? <span>{member.phone}</span> : null}
-                    <span className="org-meta">
-                      {member.roles.join(', ')}
-                      {member.staff_department_label
-                        ? `, ${member.staff_department_label}`
-                        : ''}
-                    </span>
-                  </div>
-                  {canManage && !member.is_super_admin ? (
-                    <div className="org-actions">
-                      <button type="button" className="ghost-btn" onClick={() => startEdit(member)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-btn danger"
-                        onClick={() => {
-                          if (window.confirm(`Remove ${member.name}?`)) {
-                            deleteMutation.mutate(member.id);
-                          }
-                        }}>
-                        Remove
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-              {usersQuery.isLoading ? <p>Loading team…</p> : null}
-              {!usersQuery.isLoading && (usersQuery.data?.length ?? 0) === 0 ? (
-                <PageEmpty
-                  title="No organization users yet"
-                />
-              ) : null}
-            </div>
-          </section>
+          <DirectoryList
+            title="Team members"
+            description="Admin and Staff only. Super Admin is never listed for lower roles."
+            countLabel={
+              usersQuery.isLoading
+                ? '…'
+                : `${(usersQuery.data ?? []).length} member${
+                    (usersQuery.data ?? []).length === 1 ? '' : 's'
+                  }`
+            }
+            primaryColumn="Member"
+            secondaryColumn="Email"
+            items={(usersQuery.data ?? []).map((member) => ({
+              id: member.id,
+              title: member.name,
+              subtitle: member.email,
+              searchText: [
+                member.phone,
+                member.roles.join(' '),
+                member.staff_department_label,
+              ]
+                .filter(Boolean)
+                .join(' '),
+              onClick:
+                canManage && !member.is_super_admin
+                  ? () => startEdit(member)
+                  : undefined,
+              actionLabel:
+                canManage && !member.is_super_admin
+                  ? 'Edit'
+                  : member.staff_department_label || member.roles.join(', ') || '—',
+            }))}
+            loading={usersQuery.isLoading}
+            emptyTitle="No organization users yet"
+          />
 
           {canManage ? (
             <section className="panel">
@@ -337,15 +328,32 @@ export function OrganizationTeamPage() {
                   {saveMutation.isPending ? 'Saving…' : editingId ? 'Update user' : 'Create user'}
                 </button>
                 {editingId ? (
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={() => {
-                      setEditingId(null);
-                      setDraft(emptyDraft());
-                    }}>
-                    Cancel
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="ghost-btn danger"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        const member = (usersQuery.data ?? []).find((item) => item.id === editingId);
+                        if (!member) return;
+                        if (window.confirm(`Remove ${member.name}?`)) {
+                          deleteMutation.mutate(member.id);
+                          setEditingId(null);
+                          setDraft(emptyDraft());
+                        }
+                      }}>
+                      Remove
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        setEditingId(null);
+                        setDraft(emptyDraft());
+                      }}>
+                      Cancel
+                    </button>
+                  </>
                 ) : null}
               </div>
             </form>

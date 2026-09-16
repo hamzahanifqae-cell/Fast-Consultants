@@ -111,10 +111,10 @@ class StudentProgressService
             ->exists();
         $preparationAvailable = $checklist['documents']['accepted']
             && $checklist['charge_receipts']['accepted']
-            && ! $hasOpenUrgent
-            && $application->preparation_unlocked_at !== null;
-        $interviewAvailable = $application->interview_unlocked_at !== null
-            || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true);
+            && ! $hasOpenUrgent;
+        $interviewAvailable = $application->everything_accepted
+            && ($application->interview_unlocked_at !== null
+                || in_array($application->stage, [ApplicationStage::Interview, ApplicationStage::Completed], true));
 
         $personal = $this->profileProgress($student, $profile);
         $docs = $this->documentsProgress($documents, $universities);
@@ -432,43 +432,42 @@ class StudentProgressService
             return [
                 'percent' => 0,
                 'complete' => false,
-                'report' => 'Locked, Prep, Meeting',
+                'report' => 'Locked, Meeting',
                 'meta' => 'Locked',
             ];
         }
 
-        $prepDone = $application->preparation_completed_at !== null;
+        $cancelled = $application->interview_status === InterviewStatus::Cancelled
+            && $application->interview_at === null;
         $meetingDone = $application->interview_meeting_ended_at !== null;
         $scheduled = $application->interview_at !== null;
         $declined = $application->interview_followup_preference === InterviewFollowupPreference::DeclineAnother;
         $wantsAnother = $application->interview_followup_preference === InterviewFollowupPreference::WantAnother;
-        $interviewComplete = in_array($application->interview_status, [
-            InterviewStatus::Completed,
-            InterviewStatus::Passed,
-            InterviewStatus::Failed,
-        ], true) || ($meetingDone && $declined);
+        $interviewComplete = ! $cancelled && (
+            in_array($application->interview_status, [
+                InterviewStatus::Completed,
+                InterviewStatus::Passed,
+                InterviewStatus::Failed,
+            ], true) || ($meetingDone && $declined)
+        );
 
-        $prepPct = $prepDone ? 100 : 0;
-        $meetingPct = $interviewComplete || $meetingDone
-            ? 100
-            : ($scheduled ? 70 : ($interviewAvailable ? 40 : 0));
-        $followPct = $interviewComplete
-            ? 100
-            : ($wantsAnother
-                ? 50
-                : ($meetingDone && $application->interview_followup_preference === null
-                    ? 25
-                    : ($meetingDone ? 75 : 0)));
-
-        $percent = (int) round(($prepPct + $meetingPct + $followPct) / 3);
+        $percent = match (true) {
+            ! $interviewAvailable => 0,
+            $interviewComplete => 100,
+            $cancelled => 55,
+            $scheduled => 85,
+            $wantsAnother => 68,
+            $meetingDone && $application->interview_followup_preference === null => 72,
+            default => 40,
+        };
 
         return [
             'percent' => $percent,
             'complete' => $interviewComplete,
-            'report' => "Prep {$prepPct}%, Meeting {$meetingPct}%, Follow-up {$followPct}%",
+            'report' => $interviewComplete ? 'Interview complete' : 'Meeting in progress',
             'meta' => $interviewComplete
                 ? 'Interview complete'
-                : ($interviewAvailable ? 'Interview open' : 'Preparation'),
+                : ($interviewAvailable ? 'Interview open' : 'Locked'),
         ];
     }
 
@@ -527,7 +526,6 @@ class StudentProgressService
         $steps = [
             ['label' => 'Docs', 'done' => (bool) $checklist['documents']['accepted']],
             ['label' => 'Fees', 'done' => (bool) $checklist['charge_receipts']['accepted']],
-            ['label' => 'Prep', 'done' => $application->preparation_completed_at !== null],
             ['label' => 'Interview', 'done' => $interviewDone || $application->interview_at !== null],
             [
                 'label' => 'File Making',

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ConsultantDirectoryController;
 use App\Http\Controllers\Api\ConsultantStudentDocumentController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FormTemplateController;
+use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\QuestionController;
 use App\Http\Controllers\Api\StudentApplicationController;
 use App\Http\Controllers\Api\StudentDirectoryController;
@@ -14,7 +15,7 @@ use App\Http\Controllers\Api\StudentNotificationController;
 use App\Http\Controllers\Api\StudentDocumentController;
 use App\Http\Controllers\Api\StudentProfileController;
 use App\Http\Controllers\Api\InterviewVideoController;
-use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\StudentAccountApprovalController;
 use App\Http\Controllers\Api\OrganizationUserController;
 use App\Http\Controllers\Api\UniversityController;
 use App\Http\Controllers\Api\UniversitySuggestionController;
@@ -46,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chat/departments', [ChatController::class, 'departments']);
     Route::get('/chat/staff/directory', [ChatController::class, 'staffDirectory']);
     Route::post('/chat/staff/conversations', [ChatController::class, 'startStaff']);
+    Route::post('/chat/staff/student-conversations', [ChatController::class, 'startStudent']);
         Route::post('/chat/broadcast', [ChatController::class, 'broadcast']);
         Route::post('/chat/broadcast/whatsapp', [ChatController::class, 'broadcastWhatsApp']);
 
@@ -140,6 +142,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/consultant/leads/{lead}/convert', [LeadController::class, 'convert']);
         Route::post('/consultant/leads/{lead}/dismiss', [LeadController::class, 'dismiss']);
         Route::post('/consultant/leads/{lead}/clear-credentials', [LeadController::class, 'clearCredentials']);
+
+        Route::get('/consultant/account-requests', [StudentAccountApprovalController::class, 'index']);
+        Route::post('/consultant/account-requests/{user}/approve', [StudentAccountApprovalController::class, 'approve']);
+        Route::post('/consultant/account-requests/{user}/reject', [StudentAccountApprovalController::class, 'reject']);
 
         Route::get('/consultant/universities', [UniversityController::class, 'consultantIndex']);
         Route::post('/consultant/universities', [UniversityController::class, 'store']);

@@ -6,7 +6,7 @@ import { PageSection, SectionProgress } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api } from '@/lib/api';
 import { StudentRoutes } from '@/lib/department-routes';
-import { isInterviewMeetingCancelled } from '@/lib/interview';
+import { isInterviewJourneyComplete, isInterviewMeetingCancelled } from '@/lib/interview';
 import { isProfileComplete } from '@/lib/student-profile';
 import type { ApplicationStatusResponse, StudentProfile, VisaAppointment } from '@/types/auth';
 import './dashboard.css';
@@ -68,12 +68,7 @@ function overallStatusProgress(
     areDocumentsJourneyComplete(status),
     areUniversitiesJourneyComplete(status),
     Boolean(status.checklist?.charge_receipts?.accepted),
-    Boolean(status.application?.preparation?.completed_at),
-    status.application?.interview?.status === 'completed' ||
-      status.application?.interview?.status === 'passed' ||
-      status.application?.interview?.status === 'failed' ||
-      (Boolean(status.application?.interview?.meeting_ended_at) &&
-        status.application?.interview?.followup_preference === 'decline_another'),
+    isInterviewJourneyComplete(status.application?.interview),
     appointments.some((a) => a.status === 'completed'),
   ];
   const done = steps.filter(Boolean).length;
@@ -116,16 +111,10 @@ function buildJourneySteps(
   const docsDone = areDocumentsJourneyComplete(status);
   const universitiesDone = areUniversitiesJourneyComplete(status);
   const feesDone = Boolean(status.checklist?.charge_receipts?.accepted);
-  const prepDone = Boolean(status.application?.preparation?.completed_at);
-  const interviewDone =
-    status.application?.interview?.status === 'completed' ||
-    status.application?.interview?.status === 'passed' ||
-    status.application?.interview?.status === 'failed' ||
-    (Boolean(status.application?.interview?.meeting_ended_at) &&
-      status.application?.interview?.followup_preference === 'decline_another');
+  const interviewDone = isInterviewJourneyComplete(status.application?.interview);
   const visaDone = appointments.some((a) => a.status === 'completed');
 
-  const flags = [profileDone, docsDone, universitiesDone, feesDone, prepDone, interviewDone, visaDone];
+  const flags = [profileDone, docsDone, universitiesDone, feesDone, interviewDone, visaDone];
   const firstOpen = flags.findIndex((done) => !done);
 
   function stateFor(index: number): JourneyState {
@@ -208,40 +197,22 @@ function buildJourneySteps(
       actionLabel: feesDone ? 'View' : 'Open',
     },
     {
-      id: 'preparation',
-      label: 'Interview preparation',
-      detail: !profileDone
-        ? 'Complete student info first'
-        : !status.preparation_available
-          ? 'Unlocks after documents and fees are approved'
-          : prepDone
-            ? 'Preparation checklist completed'
-            : 'Preparation notes are ready for you',
-      state: !profileDone || !status.preparation_available
-        ? 'locked'
-        : prepDone
-          ? 'complete'
-          : stateFor(4),
-      href: status.preparation_available ? StudentRoutes.interview : undefined,
-      actionLabel: prepDone ? 'View' : 'Open',
-    },
-    {
       id: 'interview',
-      label: 'Interview meeting',
+      label: 'Interview',
       detail: !profileDone
         ? 'Complete student info first'
         : !status.interview_available
-          ? 'Scheduled after preparation is complete'
+          ? 'Unlocks after documents and fees are approved'
           : isInterviewMeetingCancelled(interview)
             ? 'Meeting cancelled — staff will reschedule'
             : interview?.at
               ? `Scheduled ${formatWhen(interview.at)}`
-              : interview?.status_label ?? 'Interview stage active',
+              : interview?.status_label ?? 'Waiting for staff to schedule',
       state: !profileDone || !status.interview_available
         ? 'locked'
         : interviewDone
           ? 'complete'
-          : stateFor(5),
+          : stateFor(4),
       href: status.interview_available ? StudentRoutes.interview : undefined,
       actionLabel: 'Open',
     },
@@ -255,7 +226,7 @@ function buildJourneySteps(
           : appointments.some((a) => a.status === 'scheduled')
             ? 'Appointment scheduled — see details below'
             : 'File Making staff will book after interview',
-      state: !profileDone ? 'locked' : stateFor(6),
+      state: !profileDone ? 'locked' : stateFor(5),
       href: StudentRoutes.visaAppointments,
       actionLabel: appointments.length ? 'View' : undefined,
     },

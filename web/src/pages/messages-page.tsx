@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { InlinePageLoader } from '@/components/app-loader';
+import { DirectoryList } from '@/components/directory-list';
 import { AppShell } from '@/components/shell';
 import { api, getApiErrorMessage } from '@/lib/api';
 import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
@@ -39,11 +40,12 @@ type StaffListTab = 'inbox' | 'team' | 'blocked';
 type InboxPanel = 'menu' | 'students' | 'broadcast';
 
 type StaffDirectoryMember = {
-  id: number;
+  id: number | null;
   name: string;
-  email: string;
+  email: string | null;
   staff_department: string | null;
   staff_department_label: string | null;
+  available?: boolean;
 };
 
 type BroadcastStudent = {
@@ -61,12 +63,12 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     (isSuperAdmin || Boolean(user?.is_admin) || Boolean(user?.roles?.includes('admin')));
   const isDepartmentStaff = isConsultant && !isSuperAdmin && !isAdminViewer;
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [pendingDepartment, setPendingDepartment] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [staffListTab, setStaffListTab] = useState<StaffListTab>('inbox');
   const [inboxPanel, setInboxPanel] = useState<InboxPanel>('menu');
-  const [showTeamDirectory, setShowTeamDirectory] = useState(false);
   const [broadcastStudentIds, setBroadcastStudentIds] = useState<number[]>([]);
   const [broadcastDraft, setBroadcastDraft] = useState('');
   const [broadcastDepartment, setBroadcastDepartment] = useState('');
@@ -126,7 +128,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     queryKey: ['chat-departments'],
     enabled:
       !isConsultant ||
-      (isSuperAdmin && selectedStudentId !== null) ||
+      (isAdminViewer && selectedStudentId !== null) ||
       (showBroadcast && needsBroadcastDepartment),
     queryFn: async () => {
       const { data } = await api.get<{ data: ChatDepartment[] }>('/chat/departments');
@@ -146,7 +148,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   });
 
   const conversations = conversationsQuery.data?.data ?? [];
-  const totalUnread = conversationsQuery.data?.unread_count ?? 0;
   const studentConversations = useMemo(
     () => conversations.filter((conversation) => conversation.kind !== 'staff_dm'),
     [conversations],
@@ -184,7 +185,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
 
   const broadcastStudentsQuery = useQuery({
     queryKey: ['consultant-students'],
-    enabled: isConsultant && showBroadcast,
+    enabled: isConsultant && (showBroadcast || inboxPanel === 'students'),
     queryFn: async () => {
       const { data } = await api.get<{ data: BroadcastStudent[] }>('/consultant/students');
       return data.data;
@@ -194,6 +195,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   const blockedStudents = blocksQuery.data ?? [];
   const staffDirectory = staffDirectoryQuery.data ?? [];
   const broadcastStudents = broadcastStudentsQuery.data ?? [];
+  const directoryStudents = broadcastStudents;
   const filteredBroadcastStudents = useMemo(() => {
     const query = broadcastSearch.trim().toLowerCase();
     if (!query) {
@@ -212,9 +214,15 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   );
 
   const groupedStudents = useMemo(() => {
-    if (!isSuperAdmin && !isDepartmentStaff) {
+    if (!isConsultant) {
       return [];
     }
+
+    const blockedIds = new Set(
+      blockedStudents
+        .map((block) => block.student_id ?? block.student?.id)
+        .filter((id): id is number => typeof id === 'number'),
+    );
 
     const byStudentId = new Map<
       number,
@@ -229,9 +237,24 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
       }
     >();
 
+    for (const student of directoryStudents) {
+      if (blockedIds.has(student.id)) continue;
+      byStudentId.set(student.id, {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        unreadCount: 0,
+        preview: 'No messages yet',
+        lastMessageAt: null,
+        isBlocked: false,
+      });
+    }
+
     for (const conversation of studentConversations) {
       const student = conversation.other_user;
       if (student.id == null) continue;
+      if (blockedIds.has(student.id)) continue;
+
       const existing = byStudentId.get(student.id);
       const unreadCount = (existing?.unreadCount ?? 0) + (conversation.unread_count ?? 0);
       const lastMessageAt =
@@ -245,11 +268,11 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
 
       byStudentId.set(student.id, {
         id: student.id,
-        name: student.name ?? 'Student',
-        email: student.email ?? '',
+        name: student.name ?? existing?.name ?? 'Student',
+        email: student.email ?? existing?.email ?? '',
         unreadCount,
         preview: shouldReplace
-          ? (conversation.last_message?.body ?? 'No messages yet')
+          ? (conversation.last_message?.body ?? existing?.preview ?? 'No messages yet')
           : (existing?.preview ?? 'No messages yet'),
         lastMessageAt: shouldReplace ? lastMessageAt : (existing?.lastMessageAt ?? null),
         isBlocked: Boolean(existing?.isBlocked || conversation.is_blocked),
@@ -259,19 +282,11 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     return Array.from(byStudentId.values()).sort((left, right) =>
       left.name.localeCompare(right.name),
     );
-  }, [studentConversations, isDepartmentStaff, isSuperAdmin]);
+  }, [directoryStudents, studentConversations, blockedStudents, isConsultant]);
 
   const inboxGroupedStudents = useMemo(
     () => groupedStudents.filter((student) => !student.isBlocked),
     [groupedStudents],
-  );
-
-  const inboxConversations = useMemo(
-    () =>
-      isConsultant
-        ? studentConversations.filter((conversation) => !conversation.is_blocked)
-        : conversations,
-    [conversations, isConsultant, studentConversations],
   );
 
   const selectedStudent = useMemo(
@@ -280,14 +295,14 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   );
 
   const selectedStudentConversations = useMemo(() => {
-    if (!isSuperAdmin || !selectedStudentId) {
+    if (!isAdminViewer || !selectedStudentId) {
       return [];
     }
 
     return studentConversations.filter(
       (conversation) => conversation.other_user.id === selectedStudentId,
     );
-  }, [studentConversations, isSuperAdmin, selectedStudentId]);
+  }, [studentConversations, isAdminViewer, selectedStudentId]);
 
   const threadQuery = useQuery({
     queryKey: ['chat-messages', activeId],
@@ -329,25 +344,48 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   }, [awaitingScheduledSince, notificationsQuery.data, queryClient]);
 
   useEffect(() => {
-    if (threadQuery.isSuccess && activeId != null) {
-      queryClient.setQueryData(
-        ['chat-conversations'],
-        (current: { data: ChatConversation[]; unread_count: number } | undefined) => {
-          if (!current) return current;
-          const data = current.data.map((conversation) =>
-            conversation.id === activeId ? { ...conversation, unread_count: 0 } : conversation,
-          );
-          return {
-            ...current,
-            data,
-            unread_count: data.reduce((sum, item) => sum + (item.unread_count ?? 0), 0),
-          };
-        },
-      );
+    if (!threadQuery.isSuccess || activeId == null) return;
+
+    const opened = threadQuery.data?.conversation;
+    const openedStudentId =
+      opened && opened.kind !== 'staff_dm' ? opened.other_user?.id : null;
+    const clearAllStudentThreads = Boolean(isAdminViewer && openedStudentId);
+
+    queryClient.setQueryData(
+      ['chat-conversations'],
+      (current: { data: ChatConversation[]; unread_count: number } | undefined) => {
+        if (!current) return current;
+        const data = current.data.map((conversation) => {
+          if (conversation.id === activeId) {
+            return { ...conversation, unread_count: 0 };
+          }
+          if (
+            clearAllStudentThreads &&
+            conversation.kind !== 'staff_dm' &&
+            conversation.other_user?.id === openedStudentId
+          ) {
+            return { ...conversation, unread_count: 0 };
+          }
+          return conversation;
+        });
+        return {
+          ...current,
+          data,
+          unread_count: data.reduce((sum, item) => sum + (item.unread_count ?? 0), 0),
+        };
+      },
+    );
+  }, [threadQuery.isSuccess, threadQuery.data?.conversation, activeId, isAdminViewer, queryClient]);
+
+  // Refresh conversation badges once after opening a thread (server marks it read).
+  useEffect(() => {
+    if (activeId == null) return;
+    const timer = window.setTimeout(() => {
       void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    }
-  }, [threadQuery.dataUpdatedAt, threadQuery.isSuccess, activeId, queryClient]);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [activeId, queryClient]);
 
   useEffect(() => {
     if (
@@ -375,17 +413,31 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   const startChat = useMutation({
     mutationFn: async (department: string) => {
       const existing = studentConversations.find((item) => item.department === department);
-      if (existing) return existing;
+      if (existing) return { conversation: existing, created: false as const };
 
       const { data } = await api.post<{
-        data: { conversation: ChatConversation };
+        data: { conversation: ChatConversation | null; department?: string; department_label?: string };
       }>('/chat/conversations', { department });
-      return data.data.conversation;
+
+      return {
+        conversation: data.data.conversation,
+        department: data.data.department ?? department,
+        departmentLabel: data.data.department_label,
+        created: false as const,
+      };
     },
-    onSuccess: async (conversation) => {
+    onSuccess: async (payload) => {
       setError(null);
-      setActiveId(conversation.id);
-      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      if (payload.conversation) {
+        setPendingDepartment(null);
+        setActiveId(payload.conversation.id);
+        await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+        return;
+      }
+
+      // No thread yet — keep a local selection until the student sends a message.
+      setActiveId(null);
+      setPendingDepartment(payload.department ?? null);
     },
     onError: (err) => setError(getApiErrorMessage(err, 'Could not start chat.')),
   });
@@ -402,13 +454,62 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     },
     onSuccess: async (conversation) => {
       setError(null);
-      setShowTeamDirectory(false);
       setStaffListTab('team');
       setSelectedStudentId(null);
       setActiveId(conversation.id);
+      queryClient.setQueryData<{ data: ChatConversation[]; unread_count: number }>(
+        ['chat-conversations'],
+        (current) => {
+          if (!current) {
+            return { data: [conversation], unread_count: 0 };
+          }
+
+          const alreadyListed = current.data.some((item) => item.id === conversation.id);
+          return {
+            ...current,
+            data: alreadyListed
+              ? current.data.map((item) => (item.id === conversation.id ? conversation : item))
+              : [conversation, ...current.data],
+          };
+        },
+      );
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      await queryClient.invalidateQueries({ queryKey: ['chat-messages', conversation.id] });
     },
     onError: (err) => setError(getApiErrorMessage(err, 'Could not start staff chat.')),
+  });
+
+  const startStudentThread = useMutation({
+    mutationFn: async ({
+      studentId,
+      department,
+    }: {
+      studentId: number;
+      department?: string;
+    }) => {
+      const existing = studentConversations.find(
+        (item) =>
+          item.other_user.id === studentId &&
+          (!department || item.department === department),
+      );
+      if (existing) return existing;
+
+      const { data } = await api.post<{
+        data: { conversation: ChatConversation };
+      }>('/chat/staff/student-conversations', {
+        student_id: studentId,
+        ...(department ? { department } : {}),
+      });
+      return data.data.conversation;
+    },
+    onSuccess: async (conversation) => {
+      setError(null);
+      setSelectedStudentId(conversation.other_user.id ?? selectedStudentId);
+      setActiveId(conversation.id);
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      await queryClient.invalidateQueries({ queryKey: ['chat-messages', conversation.id] });
+    },
+    onError: (err) => setError(getApiErrorMessage(err, 'Could not open student chat.')),
   });
 
   const sendMessage = useMutation({
@@ -421,6 +522,36 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
       file: File | null;
       scheduledAt: string;
     }) => {
+      let conversationId = activeId;
+
+      if (!conversationId && pendingDepartment && !isConsultant) {
+        const opener = body.trim() || (file ? 'Attachment' : '');
+        if (!opener) {
+          throw new Error('Message required');
+        }
+
+        const { data: started } = await api.post<{
+          data: { conversation: ChatConversation };
+        }>('/chat/conversations', {
+          department: pendingDepartment,
+          message: opener,
+        });
+        conversationId = started.data.conversation.id;
+
+        if (file) {
+          const formData = new FormData();
+          formData.append('body', body.trim() && body.trim() !== opener ? body.trim() : '');
+          formData.append('attachment', file);
+          await api.post(`/chat/conversations/${conversationId}/messages`, formData);
+        }
+
+        return { conversationId };
+      }
+
+      if (!conversationId) {
+        throw new Error('No conversation');
+      }
+
       const formData = new FormData();
       formData.append('body', body);
       if (file) {
@@ -431,8 +562,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
       }
       const { data } = await api.post<{
         data: { scheduled?: boolean; scheduled_at?: string };
-      }>(`/chat/conversations/${activeId}/messages`, formData);
-      return data.data;
+      }>(`/chat/conversations/${conversationId}/messages`, formData);
+      return { ...data.data, conversationId };
     },
     onSuccess: async (payload) => {
       setDraft('');
@@ -443,13 +574,19 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         attachmentInputRef.current.value = '';
       }
       setError(null);
+      if (payload.conversationId) {
+        setActiveId(payload.conversationId);
+        setPendingDepartment(null);
+      }
       if (payload.scheduled) {
         setBroadcastNotice(
           `Message scheduled for ${payload.scheduled_at ? new Date(payload.scheduled_at).toLocaleString() : 'later'}.`,
         );
         setAwaitingScheduledSince(new Date().toISOString());
       }
-      await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] });
+      await queryClient.invalidateQueries({
+        queryKey: ['chat-messages', payload.conversationId ?? activeId],
+      });
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -652,6 +789,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     setAwaitingScheduledSince(null);
     setActiveId(null);
     setSelectedStudentId(null);
+    setStudentSearch('');
     setInboxPanel('students');
   }
 
@@ -660,6 +798,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
     setActiveId(null);
     setSelectedStudentId(null);
     setInboxPanel('menu');
+    setStudentSearch('');
     setBroadcastDraft('');
     setBroadcastStudentIds([]);
     setBroadcastSearch('');
@@ -711,7 +850,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!activeId || studentComposerLocked) return;
+    if (studentComposerLocked) return;
+    if (!activeId && !(pendingDepartment && !isConsultant)) return;
     if (!draft.trim() && !attachmentFile) return;
     sendMessage.mutate({
       body: draft.trim(),
@@ -731,6 +871,10 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
   const activeConversation =
     threadQuery.data?.conversation ??
     conversations.find((conversation) => conversation.id === activeId);
+  const pendingDepartmentMeta = pendingDepartment
+    ? (departmentsQuery.data?.find((item) => item.value === pendingDepartment) ?? null)
+    : null;
+  const composerReady = Boolean(activeId) || Boolean(pendingDepartment && !isConsultant);
   const isBlocked = Boolean(activeConversation?.is_blocked);
   const studentComposerLocked = !isConsultant && isBlocked;
   const canSendWhatsApp =
@@ -762,63 +906,72 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
       return rightAt.localeCompare(leftAt);
     })[0];
 
-    if (!conversation) {
+    setError(null);
+    setSelectedStudentId(studentId);
+
+    if (conversation) {
+      setActiveId(conversation.id);
       return;
     }
 
-    setError(null);
-    setActiveId(conversation.id);
-    setSelectedStudentId(studentId);
+    startStudentThread.mutate({ studentId });
   }
 
   function selectSuperAdminStudent(studentId: number) {
-    setError(null);
-    setActiveId(null);
-    setSelectedStudentId(studentId);
-  }
+    const matches = studentConversations.filter((item) => item.other_user.id === studentId);
+    const conversation = matches.sort((left, right) => {
+      const leftAt = left.last_message_at ?? left.last_message?.created_at ?? '';
+      const rightAt = right.last_message_at ?? right.last_message?.created_at ?? '';
+      return rightAt.localeCompare(leftAt);
+    })[0];
 
-  function openSuperAdminDepartment(department: string) {
-    const existing = selectedStudentConversations.find((item) => item.department === department);
-    if (!existing) {
+    setError(null);
+    setSelectedStudentId(studentId);
+
+    if (conversation) {
+      setActiveId(conversation.id);
       return;
     }
 
+    setActiveId(null);
+  }
+
+  function openSuperAdminDepartment(department: string) {
+    if (!selectedStudentId) return;
+
+    const existing = selectedStudentConversations.find((item) => item.department === department);
     setError(null);
-    setActiveId(existing.id);
+
+    if (existing) {
+      setActiveId(existing.id);
+      return;
+    }
+
+    startStudentThread.mutate({ studentId: selectedStudentId, department });
   }
 
   function goBackInSuperAdminInbox() {
     setError(null);
     setDraft('');
-
-    if (activeId) {
-      setActiveId(null);
-      return;
-    }
-
-    if (selectedStudentId) {
-      setSelectedStudentId(null);
-      return;
-    }
-
+    setActiveId(null);
+    setSelectedStudentId(null);
     setInboxPanel('menu');
   }
 
   function goBackInStaffInbox() {
     setError(null);
     setDraft('');
-    if (activeId) {
-      setActiveId(null);
-      setSelectedStudentId(null);
-      return;
-    }
+    setActiveId(null);
+    setSelectedStudentId(null);
     setInboxPanel('menu');
   }
 
   const threadTitle =
     activeConversation?.kind === 'staff_dm'
-      ? (activeConversation.other_user?.name ?? 'Team chat')
-      : isSuperAdmin
+      ? (activeConversation.other_user?.staff_department_label ??
+        activeConversation.other_user?.name ??
+        'Team chat')
+      : isAdminViewer
         ? activeConversation
           ? [
               activeConversation.other_user.name,
@@ -832,7 +985,9 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
         : isDepartmentStaff
           ? activeConversation
             ? activeConversation.other_user?.name
-            : 'Select a student'
+            : selectedStudent
+              ? selectedStudent.name
+              : 'Select a student'
           : isConsultant
             ? [
                 activeConversation?.other_user?.name ?? 'Select a conversation',
@@ -841,6 +996,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                   : '',
               ].join('')
             : (activeConversation?.department_label ??
+              pendingDepartmentMeta?.label ??
               activeConversation?.other_user?.name ??
               'Select a department');
 
@@ -849,17 +1005,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
       badge={isConsultant ? (isAdminViewer ? 'Admin' : 'Team') : 'Student'}
       title="Messages">
       <div className="page-stack">
-        {totalUnread > 0 ? (
-          <div
-            className="panel"
-            style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <h2 style={{ margin: 0 }}>Unread messages</h2>
-            </div>
-            <span className="status-pill">{totalUnread}</span>
-          </div>
-        ) : null}
-
         <div className="chat-layout">
             <div className="chat-list">
               {isConsultant ? (
@@ -871,7 +1016,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     className={`chat-list-tab${staffListTab === 'inbox' ? ' active' : ''}`}
                     onClick={() => {
                       setStaffListTab('inbox');
-                      setShowTeamDirectory(false);
                       setInboxPanel('menu');
                       setActiveId(null);
                       setSelectedStudentId(null);
@@ -892,7 +1036,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     onClick={() => {
                       setStaffListTab('team');
                       setSelectedStudentId(null);
-                      setShowTeamDirectory(false);
                       setInboxPanel('menu');
                     }}>
                     Team
@@ -909,7 +1052,6 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       setStaffListTab('blocked');
                       setActiveId(null);
                       setSelectedStudentId(null);
-                      setShowTeamDirectory(false);
                       setInboxPanel('menu');
                     }}>
                     Blocked
@@ -921,118 +1063,85 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
               ) : null}
 
               {isConsultant && staffListTab === 'team' ? (
-                <>
-                  <button
-                    type="button"
-                    className="chat-list-item"
-                    onClick={() => setShowTeamDirectory((value) => !value)}>
-                    <span className="chat-list-item-top">
-                      <strong>{showTeamDirectory ? 'Hide directory' : 'New message'}</strong>
-                    </span>
-                    <span className="chat-list-item-preview">Message a teammate</span>
-                  </button>
-                  {showTeamDirectory ? (
-                    staffDirectoryQuery.isLoading ? (
+                <div className="chat-team-panel">
+                  <div className="chat-team-section chat-staff-directory">
+                    <p className="chat-team-label">Staff directory</p>
+                    {staffDirectoryQuery.isLoading ? (
                       <InlinePageLoader message="Loading team…" />
                     ) : staffDirectory.length === 0 ? (
-                      <p className="empty" style={{ padding: 18 }}>
-                        No other staff found.
-                      </p>
+                      <p className="chat-team-empty">No other staff found.</p>
                     ) : (
-                      staffDirectory.map((member) => (
-                        <button
-                          key={member.id}
-                          type="button"
-                          className="chat-list-item"
-                          disabled={startStaffChat.isPending}
-                          onClick={() => startStaffChat.mutate(member.id)}>
-                          <span className="chat-list-item-top">
-                            <strong>{member.name}</strong>
-                          </span>
-                          <span className="chat-list-item-preview">
-                            {[member.staff_department_label, member.email].filter(Boolean).join(' · ')}
-                          </span>
-                        </button>
-                      ))
-                    )
-                  ) : null}
-                  {!showTeamDirectory && staffDmConversations.length === 0 ? (
-                    <p className="empty" style={{ padding: 18 }}>
-                      No team conversations yet.
-                    </p>
-                  ) : null}
-                  {!showTeamDirectory
-                    ? staffDmConversations.map((conversation) => (
-                        <button
-                          key={conversation.id}
-                          type="button"
-                          className={`chat-list-item${activeId === conversation.id ? ' active' : ''}`}
-                          onClick={() => {
-                            setError(null);
-                            setSelectedStudentId(null);
-                            setActiveId(conversation.id);
-                          }}>
-                          <span className="chat-list-item-top">
-                            <strong>{conversation.other_user.name ?? 'Staff'}</strong>
-                            {(conversation.unread_count ?? 0) > 0 ? (
-                              <span className="status-pill">{conversation.unread_count}</span>
-                            ) : null}
-                          </span>
-                          <span className="chat-list-item-preview">
-                            {conversation.other_user.staff_department_label
-                              ? `${conversation.other_user.staff_department_label} · `
-                              : ''}
-                            {conversation.last_message?.body ?? 'No messages yet'}
-                          </span>
-                        </button>
-                      ))
-                    : null}
-                </>
+                      <div className="chat-team-list">
+                        {staffDirectory.map((member) => {
+                          const selected =
+                            member.id != null &&
+                            activeConversation?.kind === 'staff_dm' &&
+                            activeConversation.other_user.id === member.id;
+                          const canSelect = Boolean(member.id) && member.available !== false;
+
+                          return (
+                            <button
+                              key={member.staff_department ?? member.name}
+                              type="button"
+                              className={`chat-list-item chat-list-person chat-team-card${
+                                selected ? ' active' : ''
+                              }`}
+                              disabled={!canSelect || startStaffChat.isPending}
+                              onClick={() => {
+                                if (!member.id) return;
+                                startStaffChat.mutate(member.id);
+                              }}>
+                              <span className="chat-list-person-copy">
+                                <span className="chat-list-item-top">
+                                  <strong>{member.name}</strong>
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : null}
 
               {isConsultant && staffListTab === 'blocked' ? (
-                <>
+                <div className="chat-team-panel">
                   {blocksQuery.isLoading ? (
                     <InlinePageLoader message="Loading blocked students…" />
                   ) : null}
                   {!blocksQuery.isLoading && blockedStudents.length === 0 ? (
-                    <p className="empty" style={{ padding: 18 }}>
+                    <p className="chat-team-empty" style={{ margin: 14 }}>
                       No students are blocked.
                     </p>
                   ) : null}
-                  {blockedStudents.map((block) => (
-                    <div key={block.student_id} className="chat-list-item chat-blocked-row">
-                      <span className="chat-list-item-top">
-                        <strong>{block.student.name ?? 'Student'}</strong>
-                      </span>
-                      <span className="chat-list-item-preview">
-                        {block.student.email ?? 'No email'}
-                        {block.blocked_by?.name ? `, by ${block.blocked_by.name}` : ''}
-                        {block.blocked_at
-                          ? `, ${new Date(block.blocked_at).toLocaleString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}`
-                          : ''}
-                      </span>
-                      <button
-                        type="button"
-                        className="chat-block-btn unblock"
-                        disabled={unblockStudent.isPending}
-                        onClick={() => {
-                          const confirmed = window.confirm(
-                            'Unblock this student so they can message all staff again?',
-                          );
-                          if (!confirmed) return;
-                          unblockStudent.mutate(block.student_id);
-                        }}>
-                        Unblock
-                      </button>
-                    </div>
-                  ))}
-                </>
+                  <div className="chat-team-list">
+                    {blockedStudents.map((block) => (
+                      <div
+                        key={block.student_id}
+                        className="chat-list-item chat-list-person chat-team-card chat-blocked-row">
+                        <span className="chat-list-person-copy">
+                          <span className="chat-list-item-top">
+                            <strong>{block.student.name ?? 'Student'}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            className="chat-block-btn unblock"
+                            disabled={unblockStudent.isPending}
+                            onClick={() => {
+                              const confirmed = window.confirm(
+                                'Unblock this student so they can message all staff again?',
+                              );
+                              if (!confirmed) return;
+                              unblockStudent.mutate(block.student_id);
+                            }}>
+                            Unblock
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : null}
 
               {!isConsultant ? (
@@ -1047,19 +1156,16 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       <button
                         key={department.value}
                         type="button"
-                        className={`chat-list-item${
-                          activeConversation?.department === department.value ? ' active' : ''
+                        className={`chat-list-item chat-team-card${
+                          activeConversation?.department === department.value ||
+                          pendingDepartment === department.value
+                            ? ' active'
+                            : ''
                         }`}
                         onClick={() => startChat.mutate(department.value)}>
                         <span className="chat-list-item-top">
                           <strong>{department.label}</strong>
                           {unread > 0 ? <span className="chat-unread-badge">{unread}</span> : null}
-                        </span>
-                        <span className="chat-list-item-preview">
-                          {conversation?.other_user_typing
-                            ? 'typing…'
-                            : (conversation?.last_message?.body ??
-                              'Tap to message this department')}
                         </span>
                       </button>
                     );
@@ -1070,18 +1176,13 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       <button
                         key={conversation.id}
                         type="button"
-                        className={`chat-list-item${activeId === conversation.id ? ' active' : ''}`}
+                        className={`chat-list-item chat-team-card${activeId === conversation.id ? ' active' : ''}`}
                         onClick={() => setActiveId(conversation.id)}>
                         <span className="chat-list-item-top">
                           <strong>{conversation.other_user.name ?? 'Previous chat'}</strong>
                           {(conversation.unread_count ?? 0) > 0 ? (
                             <span className="chat-unread-badge">{conversation.unread_count}</span>
                           ) : null}
-                        </span>
-                        <span className="chat-list-item-preview">
-                          {conversation.other_user_typing
-                            ? 'typing…'
-                            : (conversation.last_message?.body ?? 'No messages yet')}
                         </span>
                       </button>
                     ))}
@@ -1091,35 +1192,49 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
               {isConsultant && staffListTab === 'inbox' ? (
                 <>
                   {inboxPanel === 'menu' ? (
-                    <>
-                      <button type="button" className="chat-list-item" onClick={openBroadcastPanel}>
-                        <span className="chat-list-item-top">
+                    <div className="chat-menu">
+                      <button type="button" className="chat-menu-card" onClick={openBroadcastPanel}>
+                        <span className="chat-menu-icon" aria-hidden>
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                            <path
+                              d="M4 7h16M4 12h10M4 17h13"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="chat-menu-copy">
                           <strong>Broadcast</strong>
-                        </span>
-                        <span className="chat-list-item-preview">
-                          Send one message to selected students
+                          <span>Send one message to selected students</span>
                         </span>
                       </button>
-                      <button type="button" className="chat-list-item" onClick={openStudentsPanel}>
-                        <span className="chat-list-item-top">
+                      <button type="button" className="chat-menu-card" onClick={openStudentsPanel}>
+                        <span className="chat-menu-icon students" aria-hidden>
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                            <path
+                              d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM8 12a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM8 14c-2.67 0-8 1.34-8 4v1h10v-1c0-1.1.45-2.1 1.2-2.9A11.3 11.3 0 0 0 8 14Zm8 0c-.4 0-.8.03-1.18.08A5.3 5.3 0 0 1 17 18v1h7v-1c0-2.66-5.33-4-8-4Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </span>
+                        <span className="chat-menu-copy">
                           <strong>Students</strong>
-                          {studentConversations.reduce(
-                            (sum, conversation) => sum + (conversation.unread_count ?? 0),
-                            0,
-                          ) > 0 ? (
-                            <span className="status-pill">
-                              {studentConversations.reduce(
-                                (sum, conversation) => sum + (conversation.unread_count ?? 0),
-                                0,
-                              )}
-                            </span>
-                          ) : null}
+                          <span>Open student conversations</span>
                         </span>
-                        <span className="chat-list-item-preview">
-                          Open student conversations
-                        </span>
+                        {studentConversations.reduce(
+                          (sum, conversation) => sum + (conversation.unread_count ?? 0),
+                          0,
+                        ) > 0 ? (
+                          <span className="chat-unread-badge">
+                            {studentConversations.reduce(
+                              (sum, conversation) => sum + (conversation.unread_count ?? 0),
+                              0,
+                            )}
+                          </span>
+                        ) : null}
                       </button>
-                    </>
+                    </div>
                   ) : null}
 
                   {inboxPanel === 'broadcast' ? (
@@ -1128,171 +1243,66 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     </button>
                   ) : null}
 
-                  {inboxPanel === 'students' && isSuperAdmin ? (
+                  {inboxPanel === 'students' && isAdminViewer ? (
                     <>
                       <button
                         type="button"
                         className="chat-list-back"
                         onClick={goBackInSuperAdminInbox}>
-                        {selectedStudentId
-                          ? activeId
-                            ? '← Departments'
-                            : '← All students'
-                          : '← Back'}
+                        ← Back
                       </button>
-                      {!selectedStudentId ? (
-                        <>
-                          {conversationsQuery.isLoading ? (
-                            <InlinePageLoader message="Loading students…" />
-                          ) : null}
-                          {!conversationsQuery.isLoading && !inboxGroupedStudents.length ? (
-                            <p className="empty" style={{ padding: 18 }}>
-                              No student messages yet.
-                            </p>
-                          ) : null}
-                          {inboxGroupedStudents.map((student) => (
-                            <button
-                              key={student.id}
-                              type="button"
-                              className={`chat-list-item${
-                                selectedStudentId === student.id ? ' active' : ''
-                              }`}
-                              onClick={() => selectSuperAdminStudent(student.id)}>
-                              <span className="chat-list-item-top">
-                                <strong>{student.name}</strong>
-                                <span className="chat-list-item-meta">
-                                  {student.unreadCount > 0 ? (
-                                    <span className="chat-unread-badge">{student.unreadCount}</span>
-                                  ) : null}
-                                </span>
-                              </span>
-                              <span className="chat-list-item-preview">
-                                {student.email}, {student.preview}
-                              </span>
-                            </button>
-                          ))}
-                        </>
-                      ) : (
-                        <>
-                          <p className="dept-picker-label">
-                            Departments for {selectedStudent?.name ?? 'student'}
-                          </p>
-                          {departmentsQuery.data?.map((department) => {
-                            const conversation = selectedStudentConversations.find(
-                              (item) => item.department === department.value,
-                            );
-                            const unread = conversation?.unread_count ?? 0;
-                            return (
-                              <button
-                                key={department.value}
-                                type="button"
-                                className={`chat-list-item${
-                                  activeId === conversation?.id ? ' active' : ''
-                                }`}
-                                disabled={!conversation}
-                                onClick={() => openSuperAdminDepartment(department.value)}>
-                                <span className="chat-list-item-top">
-                                  <strong>{department.label}</strong>
-                                  {unread > 0 ? (
-                                    <span className="chat-unread-badge">{unread}</span>
-                                  ) : null}
-                                </span>
-                                <span className="chat-list-item-preview">
-                                  {conversation?.other_user_typing
-                                    ? 'typing…'
-                                    : (conversation?.last_message?.body ?? 'No conversation yet')}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
+                      <DirectoryList
+                        framed={false}
+                        title="Students"
+                        items={inboxGroupedStudents.map((student) => ({
+                          id: student.id,
+                          title: student.name,
+                          subtitle: student.email,
+                          active: selectedStudentId === student.id,
+                          onClick: () => selectSuperAdminStudent(student.id),
+                          badge:
+                            student.unreadCount > 0 ? (
+                              <span className="chat-unread-badge">{student.unreadCount}</span>
+                            ) : (
+                              'Open'
+                            ),
+                        }))}
+                        loading={
+                          broadcastStudentsQuery.isLoading || conversationsQuery.isLoading
+                        }
+                        emptyTitle="No students yet"
+                      />
                     </>
                   ) : null}
 
                   {inboxPanel === 'students' && isDepartmentStaff ? (
                     <>
                       <button type="button" className="chat-list-back" onClick={goBackInStaffInbox}>
-                        {activeId ? '← All students' : '← Back'}
+                        ← Back
                       </button>
-                      {conversationsQuery.isLoading ? (
-                        <InlinePageLoader message="Loading students…" />
-                      ) : null}
-                      {!conversationsQuery.isLoading && !inboxGroupedStudents.length ? (
-                        <p className="empty" style={{ padding: 18 }}>
-                          No student messages for your department yet.
-                        </p>
-                      ) : null}
-                      {inboxGroupedStudents.map((student) => (
-                        <button
-                          key={student.id}
-                          type="button"
-                          className={`chat-list-item${
-                            activeId && selectedStudentId === student.id ? ' active' : ''
-                          }`}
-                          onClick={() => selectStaffStudent(student.id)}>
-                          <span className="chat-list-item-top">
-                            <strong>{student.name}</strong>
-                            <span className="chat-list-item-meta">
-                              {student.unreadCount > 0 ? (
-                                <span className="chat-unread-badge">{student.unreadCount}</span>
-                              ) : null}
-                            </span>
-                          </span>
-                          <span className="chat-list-item-preview">
-                            {student.email}, {student.preview}
-                          </span>
-                        </button>
-                      ))}
-                    </>
-                  ) : null}
-
-                  {inboxPanel === 'students' && !isSuperAdmin && isAdminViewer ? (
-                    <>
-                      <button
-                        type="button"
-                        className="chat-list-back"
-                        onClick={() => {
-                          if (activeId) {
-                            setActiveId(null);
-                            return;
-                          }
-                          goBackToInboxMenu();
-                        }}>
-                        {activeId ? '← All students' : '← Back'}
-                      </button>
-                      {conversationsQuery.isLoading ? (
-                        <InlinePageLoader message="Loading conversations…" />
-                      ) : null}
-                      {!conversationsQuery.isLoading && !inboxConversations.length ? (
-                        <p className="empty" style={{ padding: 18 }}>
-                          No student messages yet.
-                        </p>
-                      ) : null}
-                      {inboxConversations.map((conversation) => (
-                        <button
-                          key={conversation.id}
-                          type="button"
-                          className={`chat-list-item${activeId === conversation.id ? ' active' : ''}`}
-                          onClick={() => setActiveId(conversation.id)}>
-                          <span className="chat-list-item-top">
-                            <strong>{conversation.other_user.name}</strong>
-                            <span className="chat-list-item-meta">
-                              {(conversation.unread_count ?? 0) > 0 ? (
-                                <span className="chat-unread-badge">{conversation.unread_count}</span>
-                              ) : null}
-                            </span>
-                          </span>
-                          <span className="chat-list-item-preview">
-                            {conversation.department_label
-                              ? `${conversation.department_label}, `
-                              : ''}
-                            {conversation.other_user_typing
-                              ? 'typing…'
-                              : (conversation.last_message?.body ?? 'No messages yet')}
-                          </span>
-                        </button>
-                      ))}
+                      <DirectoryList
+                        framed={false}
+                        title="Students"
+                        items={inboxGroupedStudents.map((student) => ({
+                          id: student.id,
+                          title: student.name,
+                          subtitle: student.email,
+                          active: selectedStudentId === student.id,
+                          onClick: () => {
+                            if (!startStudentThread.isPending) selectStaffStudent(student.id);
+                          },
+                          badge:
+                            student.unreadCount > 0 ? (
+                              <span className="chat-unread-badge">{student.unreadCount}</span>
+                            ) : (
+                              'Open'
+                            ),
+                        }))}
+                        loading={
+                          broadcastStudentsQuery.isLoading || conversationsQuery.isLoading
+                        }
+                        emptyTitle="No students yet"
+                      />
                     </>
                   ) : null}
                 </>
@@ -1302,8 +1312,15 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
             <div className="chat-thread">
               {showBroadcast ? (
                 <>
-                  <div className="chat-thread-header">
-                    <span>Broadcast to students</span>
+                  <div className="chat-thread-header chat-broadcast-header">
+                    <div className="chat-thread-title-block">
+                      <span>Broadcast to students</span>
+                      {!needsBroadcastDepartment ? (
+                        <small className="chat-broadcast-header-hint">
+                          Sends to {user?.staff_department_label ?? 'your department'}
+                        </small>
+                      ) : null}
+                    </div>
                     <div className="chat-thread-header-actions">
                       <div
                         ref={broadcastScheduleDropdownRef}
@@ -1353,51 +1370,79 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                           ))}
                         </select>
                       </label>
-                    ) : (
-                      <p className="chat-broadcast-hint">
-                        Sends to your department
-                        {user?.staff_department_label ? ` (${user.staff_department_label})` : ''}.
-                      </p>
-                    )}
+                    ) : null}
+
+                    <section className="chat-broadcast-recipients">
+                      <div className="chat-broadcast-recipients-head">
+                        <label className="chat-broadcast-field chat-broadcast-search-field">
+                          <span>Students</span>
+                          <input
+                            value={broadcastSearch}
+                            onChange={(event) => setBroadcastSearch(event.target.value)}
+                            placeholder="Search by name or email"
+                            autoComplete="off"
+                          />
+                        </label>
+                        <div className="chat-broadcast-recipients-meta">
+                          <span>
+                            {broadcastStudentIds.length > 0
+                              ? `${broadcastStudentIds.length} selected`
+                              : `${filteredBroadcastStudents.length} listed`}
+                          </span>
+                          {filteredBroadcastStudents.length > 0 ? (
+                            <button
+                              type="button"
+                              className="text-link-btn"
+                              onClick={() => {
+                                const visibleIds = filteredBroadcastStudents.map((item) => item.id);
+                                const allSelected = visibleIds.every((id) =>
+                                  broadcastStudentIds.includes(id),
+                                );
+                                setBroadcastStudentIds((current) =>
+                                  allSelected
+                                    ? current.filter((id) => !visibleIds.includes(id))
+                                    : Array.from(new Set([...current, ...visibleIds])),
+                                );
+                              }}>
+                              {filteredBroadcastStudents.every((item) =>
+                                broadcastStudentIds.includes(item.id),
+                              )
+                                ? 'Clear visible'
+                                : 'Select visible'}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="chat-broadcast-students">
+                        {broadcastStudentsQuery.isLoading ? (
+                          <InlinePageLoader message="Loading students…" />
+                        ) : filteredBroadcastStudents.length === 0 ? (
+                          <p className="chat-broadcast-empty">No students found.</p>
+                        ) : (
+                          filteredBroadcastStudents.map((student) => {
+                            const selected = broadcastStudentIds.includes(student.id);
+                            return (
+                              <label
+                                key={student.id}
+                                className={`chat-broadcast-student${selected ? ' is-selected' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleBroadcastStudent(student.id)}
+                                />
+                                <span>
+                                  <strong>{student.name}</strong>
+                                  <span>{student.email}</span>
+                                </span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </section>
+
                     <label className="chat-broadcast-field">
-                      <span>Search students</span>
-                      <input
-                        value={broadcastSearch}
-                        onChange={(event) => setBroadcastSearch(event.target.value)}
-                        placeholder="Name or email"
-                      />
-                    </label>
-                    <div className="chat-broadcast-students">
-                      {broadcastStudentsQuery.isLoading ? (
-                        <InlinePageLoader message="Loading students…" />
-                      ) : filteredBroadcastStudents.length === 0 ? (
-                        <p className="empty">No students found.</p>
-                      ) : (
-                        filteredBroadcastStudents.map((student) => {
-                          const selected = broadcastStudentIds.includes(student.id);
-                          return (
-                            <label key={student.id} className="chat-broadcast-student">
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={() => toggleBroadcastStudent(student.id)}
-                              />
-                              <span>
-                                <strong>{student.name}</strong>
-                                <span>{student.email}</span>
-                              </span>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                    <label className="chat-broadcast-field">
-                      <span>
-                        Message
-                        {broadcastStudentIds.length > 0
-                          ? ` · ${broadcastStudentIds.length} selected`
-                          : ''}
-                      </span>
+                      <span>Message</span>
                       <textarea
                         value={broadcastDraft}
                         onChange={(event) => setBroadcastDraft(event.target.value)}
@@ -1405,7 +1450,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                         rows={4}
                       />
                     </label>
-                    <div className="chat-attach-row">
+
+                    <div className="chat-attach-row chat-broadcast-attach">
                       <input
                         ref={broadcastAttachmentInputRef}
                         type="file"
@@ -1417,7 +1463,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       />
                       <button
                         type="button"
-                        className="chat-attach-btn"
+                        className="ghost-btn btn-sm"
                         onClick={() => broadcastAttachmentInputRef.current?.click()}>
                         Attach file
                       </button>
@@ -1440,9 +1486,11 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                         <span className="chat-attach-hint">PDF, JPG, PNG, DOC, video · max 50 MB</span>
                       )}
                     </div>
+
+                    <div className="chat-broadcast-actions">
                       <button
                         type="button"
-                        className="chat-broadcast-send"
+                        className="primary-btn chat-broadcast-send"
                         disabled={
                           broadcastMessage.isPending ||
                           broadcastWhatsApp.isPending ||
@@ -1459,34 +1507,37 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       </button>
                       <button
                         type="button"
-                        className="chat-whatsapp-btn chat-broadcast-whatsapp"
+                        className="chat-broadcast-whatsapp"
                         disabled={
                           !canBroadcastWhatsApp ||
                           broadcastMessage.isPending ||
                           broadcastWhatsApp.isPending
                         }
                         onClick={() => broadcastWhatsApp.mutate()}>
-                        {broadcastWhatsApp.isPending ? 'Sending…' : 'WhatsApp'}
+                        {broadcastWhatsApp.isPending ? 'Sending…' : 'Send on WhatsApp'}
                       </button>
+                    </div>
                     {error ? <p className="form-error">{error}</p> : null}
                   </div>
                 </>
               ) : (
                 <>
               <div className="chat-thread-header">
-                <div className="chat-thread-title-block">
-                  <span>{threadTitle}</span>
-                  {isConsultant && activeConversation?.other_user?.phone ? (
-                    <small className="chat-thread-phone">
-                      WhatsApp → {activeConversation.other_user.phone}
-                    </small>
-                  ) : isConsultant &&
-                    activeConversation?.kind === 'student_department' &&
-                    !activeConversation?.other_user?.phone ? (
-                    <small className="chat-thread-phone warn">
-                      No phone on Personal info — WhatsApp disabled
-                    </small>
-                  ) : null}
+                <div className="chat-thread-identity">
+                  <div className="chat-thread-title-block">
+                    <span>{threadTitle}</span>
+                    {isConsultant && activeConversation?.other_user?.phone ? (
+                      <small className="chat-thread-phone">
+                        WhatsApp → {activeConversation.other_user.phone}
+                      </small>
+                    ) : isConsultant &&
+                      activeConversation?.kind === 'student_department' &&
+                      !activeConversation?.other_user?.phone ? (
+                      <small className="chat-thread-phone warn">
+                        No phone on Personal info — WhatsApp disabled
+                      </small>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="chat-thread-header-actions">
                   {isConsultant && activeId ? (
@@ -1553,11 +1604,59 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                 </p>
               ) : null}
               <div className="chat-messages">
+                {!activeId && !pendingDepartment && !(isAdminViewer && selectedStudentId) ? (
+                  <div className="chat-messages-empty chat-messages-idle">
+                    <strong>Select a conversation</strong>
+                    Choose a student, teammate, or department from the left to start messaging.
+                  </div>
+                ) : null}
+                {!activeId && isAdminViewer && selectedStudentId ? (
+                  <div className="chat-thread-dept-picker">
+                    <div className="chat-messages-empty chat-messages-idle">
+                      <strong>Message {selectedStudent?.name ?? 'student'}</strong>
+                      Choose which department thread to open.
+                    </div>
+                    <div className="chat-card-list chat-thread-dept-list">
+                      {departmentsQuery.isLoading ? (
+                        <InlinePageLoader message="Loading departments…" />
+                      ) : null}
+                      {departmentsQuery.data?.map((department) => {
+                        const conversation = selectedStudentConversations.find(
+                          (item) => item.department === department.value,
+                        );
+                        const unread = conversation?.unread_count ?? 0;
+                        return (
+                          <button
+                            key={department.value}
+                            type="button"
+                            className="chat-list-item chat-team-card"
+                            disabled={startStudentThread.isPending}
+                            onClick={() => openSuperAdminDepartment(department.value)}>
+                            <span className="chat-list-item-top">
+                              <strong>{department.label}</strong>
+                              {unread > 0 ? (
+                                <span className="chat-unread-badge">{unread}</span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                {activeId || pendingDepartment ? (
+                  <>
+                {(threadQuery.data?.messages ?? []).length === 0 && !threadQuery.isLoading ? (
+                  <div className="chat-messages-empty">
+                    <strong>No messages yet</strong>
+                    Start the conversation with a short note or attachment.
+                  </div>
+                ) : null}
                 {(threadQuery.data?.messages ?? []).map((message) => (
                   <div
                     key={message.id}
                     className={`bubble ${message.mine ? 'mine' : 'theirs'}`}>
-                    {message.body ? <span>{message.body}</span> : null}
+                    {message.body ? <span className="bubble-body">{message.body}</span> : null}
                     {message.attachment ? (
                       <button
                         type="button"
@@ -1565,6 +1664,14 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                         onClick={() => void openChatAttachment(message.attachment!)}>
                         {message.attachment.name ?? 'Attachment'}
                       </button>
+                    ) : null}
+                    {message.created_at ? (
+                      <span className="bubble-meta">
+                        {new Date(message.created_at).toLocaleTimeString(undefined, {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     ) : null}
                   </div>
                 ))}
@@ -1574,6 +1681,8 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     <span className="typing-dot" />
                     <span className="typing-dot" />
                   </div>
+                ) : null}
+                  </>
                 ) : null}
               </div>
               <form className="chat-composer" onSubmit={onSubmit}>
@@ -1588,9 +1697,19 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                   <button
                     type="button"
                     className="chat-attach-btn"
-                    disabled={!activeId || studentComposerLocked}
+                    aria-label="Attach file"
+                    title="Attach file"
+                    disabled={!composerReady || studentComposerLocked}
                     onClick={() => attachmentInputRef.current?.click()}>
-                    Attach
+                    <svg className="chat-attach-icon" viewBox="0 0 24 24" aria-hidden fill="none">
+                      <path
+                        d="M16.5 6.5v8.25a4.5 4.5 0 1 1-9 0V6.75a3 3 0 0 1 6 0v7.5a1.5 1.5 0 1 1-3 0V7.5"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
                   <input
                     value={draft}
@@ -1598,7 +1717,7 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                     placeholder={
                       studentComposerLocked
                         ? 'Chat is blocked'
-                        : activeId
+                        : composerReady
                           ? 'Type a message…'
                           : staffListTab === 'team'
                             ? 'Select a teammate first'
@@ -1608,12 +1727,15 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                                 ? 'Select a student first'
                                 : 'Select a department first'
                     }
-                    disabled={!activeId || studentComposerLocked}
+                    disabled={!composerReady || studentComposerLocked}
                   />
                   {isConsultant ? (
                     <button
                       type="button"
                       className="chat-whatsapp-btn"
+                      aria-label={
+                        sendWhatsApp.isPending ? 'Sending on WhatsApp' : 'Send on WhatsApp'
+                      }
                       title={
                         scheduleAt
                           ? 'Clear schedule to use WhatsApp'
@@ -1624,18 +1746,61 @@ export function MessagesPage({ isConsultant }: MessagesPageProps) {
                       }
                       disabled={!canSendWhatsApp || sendMessage.isPending || sendWhatsApp.isPending}
                       onClick={onSendWhatsApp}>
-                      {sendWhatsApp.isPending ? 'Sending…' : 'WhatsApp'}
+                      {sendWhatsApp.isPending ? (
+                        <span className="chat-whatsapp-pending" aria-hidden>
+                          …
+                        </span>
+                      ) : (
+                        <svg
+                          className="chat-whatsapp-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden
+                          focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"
+                          />
+                        </svg>
+                      )}
                     </button>
                   ) : null}
                   <button
                     type="submit"
+                    className="chat-send-btn"
+                    aria-label={
+                      isConsultant && scheduleAt
+                        ? 'Schedule message'
+                        : sendMessage.isPending
+                          ? 'Sending'
+                          : 'Send message'
+                    }
+                    title={isConsultant && scheduleAt ? 'Schedule' : 'Send'}
                     disabled={
-                      !activeId ||
+                      !composerReady ||
                       (!draft.trim() && !attachmentFile) ||
                       sendMessage.isPending ||
                       studentComposerLocked
                     }>
-                    {isConsultant && scheduleAt ? 'Schedule' : 'Send'}
+                    {sendMessage.isPending ? (
+                      <span className="chat-send-pending" aria-hidden>
+                        …
+                      </span>
+                    ) : (
+                      <svg
+                        className="chat-send-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                        focusable="false"
+                        fill="none">
+                        <path
+                          d="M9 6.5 15.5 12 9 17.5"
+                          stroke="currentColor"
+                          strokeWidth="2.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 {attachmentFile ? (

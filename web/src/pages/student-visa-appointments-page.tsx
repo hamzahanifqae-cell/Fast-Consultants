@@ -99,7 +99,7 @@ export function StudentVisaAppointmentsPage() {
                 />
               ) : null}
               <p className="muted" style={{ marginTop: 16 }}>
-                Complete <Link to={StudentRoutes.interview}>Interview</Link> preparation first if that
+                Complete <Link to={StudentRoutes.interview}>Interview</Link> first if that
                 section is still open.
               </p>
             </section>

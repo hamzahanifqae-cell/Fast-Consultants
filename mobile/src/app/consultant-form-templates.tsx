@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { AppButton } from '@/components/ui/app-button';
 import { DepartmentStudentGate } from '@/components/department-student-gate';
 import { SponsorshipLetterDocument } from '@/components/sponsorship-letter-document';
 import { StudentScreen } from '@/components/student/student-screen';
@@ -144,14 +145,11 @@ export default function ConsultantFormTemplatesScreen() {
 
         <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText type="smallBold">{letter?.title ?? 'Sponsorship letter'}</ThemedText>
-          <Pressable
+          <AppButton
             disabled={sendLetter.isPending}
+            label={sendLetter.isPending ? 'Sending…' : 'Send to student'}
             onPress={() => sendLetter.mutate()}
-            style={[styles.button, styles.primary, { opacity: sendLetter.isPending ? 0.6 : 1 }]}>
-            <ThemedText type="smallBold" style={styles.buttonText}>
-              {sendLetter.isPending ? 'Sending…' : 'Send to student'}
-            </ThemedText>
-          </Pressable>
+          />
         </ThemedView>
 
         <ThemedText type="subtitle" style={{ marginTop: Spacing.three }}>
@@ -171,14 +169,12 @@ export default function ConsultantFormTemplatesScreen() {
               {item.status_label}
               {item.rejection_reason ? ` — ${item.rejection_reason}` : ''}
             </ThemedText>
-            <Pressable
+            <AppButton
               disabled={deleteAssignment.isPending}
+              label="Delete"
               onPress={() => deleteAssignment.mutate(item.id)}
-              style={[styles.button, styles.reject]}>
-              <ThemedText type="smallBold" style={styles.buttonText}>
-                Delete
-              </ThemedText>
-            </Pressable>
+              variant="danger"
+            />
           </ThemedView>
         ))}
 
@@ -211,14 +207,11 @@ export default function ConsultantFormTemplatesScreen() {
 
               <SponsorshipLetterDocument item={item} showHeader={false} />
 
-              <Pressable
+              <AppButton
                 disabled={updateStatus.isPending}
+                label="Approve"
                 onPress={() => updateStatus.mutate({ id: item.id, status: 'approved' })}
-                style={[styles.button, styles.approve]}>
-                <ThemedText type="smallBold" style={styles.buttonText}>
-                  Approve
-                </ThemedText>
-              </Pressable>
+              />
               <TextInput
                 multiline
                 onChangeText={(value) =>
@@ -233,8 +226,9 @@ export default function ConsultantFormTemplatesScreen() {
                 ]}
                 value={reason}
               />
-              <Pressable
+              <AppButton
                 disabled={updateStatus.isPending || reason.trim().length === 0}
+                label="Reject"
                 onPress={() =>
                   updateStatus.mutate({
                     id: item.id,
@@ -242,15 +236,8 @@ export default function ConsultantFormTemplatesScreen() {
                     rejection_reason: reason.trim(),
                   })
                 }
-                style={[
-                  styles.button,
-                  styles.reject,
-                  { opacity: reason.trim().length === 0 ? 0.55 : 1 },
-                ]}>
-                <ThemedText type="smallBold" style={styles.buttonText}>
-                  Reject
-                </ThemedText>
-              </Pressable>
+                variant="danger"
+              />
             </ThemedView>
           );
         })}
@@ -273,18 +260,16 @@ export default function ConsultantFormTemplatesScreen() {
                 <ThemedText type="caption" style={{ color: '#047857', fontWeight: '700' }}>
                   Approved
                 </ThemedText>
-                <Pressable
+                <AppButton
+                  label={open ? 'Hide letter' : 'View letter'}
                   onPress={() =>
                     setExpandedApproved((current) => ({
                       ...current,
                       [item.id]: !current[item.id],
                     }))
                   }
-                  style={[styles.button, styles.primary]}>
-                  <ThemedText type="smallBold" style={styles.buttonText}>
-                    {open ? 'Hide letter' : 'View letter'}
-                  </ThemedText>
-                </Pressable>
+                  variant="ghost"
+                />
               </ThemedView>
               {open ? <SponsorshipLetterDocument item={item} showHeader={false} /> : null}
             </View>
@@ -316,22 +301,5 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 80,
     textAlignVertical: 'top',
-  },
-  button: {
-    borderRadius: 12,
-    paddingVertical: Spacing.two,
-    alignItems: 'center',
-  },
-  primary: {
-    backgroundColor: '#0f766e',
-  },
-  approve: {
-    backgroundColor: '#15803d',
-  },
-  reject: {
-    backgroundColor: '#b91c1c',
-  },
-  buttonText: {
-    color: '#fff',
   },
 });

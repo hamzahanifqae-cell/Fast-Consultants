@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { DirectoryList } from '@/components/directory-list';
 import { PageEmpty, PageSection, PageSplit } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { StudentProgressReport } from '@/components/student-progress-report';
 import { api } from '@/lib/api';
 import { departmentRoutes, StudentRoutes } from '@/lib/department-routes';
 import { welcomeRoleTitle, welcomeTimestamp, welcomeTitle } from '@/lib/greeting';
-import { isInterviewMeetingCancelled } from '@/lib/interview';
+import { isInterviewJourneyComplete, isInterviewMeetingCancelled } from '@/lib/interview';
 import { openAuthenticatedFile } from '@/lib/open-authenticated-file';
 import { orgPortalForUser } from '@/lib/portals';
 import {
@@ -72,22 +73,6 @@ function isProfileComplete(profile: StudentProfile | undefined) {
 /**
  * The step the student is on now. Only advances after that step is finished.
  */
-function isInterviewJourneyComplete(
-  interview: ApplicationStatusResponse['application']['interview'] | undefined,
-): boolean {
-  if (!interview) return false;
-  if (
-    interview.status === 'completed' ||
-    interview.status === 'passed' ||
-    interview.status === 'failed'
-  ) {
-    return true;
-  }
-  return (
-    Boolean(interview.meeting_ended_at) && interview.followup_preference === 'decline_another'
-  );
-}
-
 function isVisaJourneyComplete(appointments: VisaAppointment[]): boolean {
   return appointments.some((appointment) => appointment.status === 'completed');
 }
@@ -240,28 +225,10 @@ function currentStudentStep(
     };
   }
 
-  if (!status.preparation_available) {
-    return {
-      title: 'Waiting for preparation unlock',
-      body: 'Documents and fees are done. Staff will unlock interview preparation next.',
-      to: StudentRoutes.interview,
-      label: 'Open interview',
-    };
-  }
-
-  if (!status.application?.preparation?.completed_at) {
-    return {
-      title: 'Complete interview preparation',
-      body: 'Preparation is unlocked. Open Interview to finish the checklist before your meeting.',
-      to: StudentRoutes.interview,
-      label: 'Open interview',
-    };
-  }
-
   if (!status.interview_available) {
     return {
-      title: 'Waiting for interview scheduling',
-      body: 'Preparation is complete. Interview details will appear when staff unlock them.',
+      title: 'Waiting for interview',
+      body: 'Documents and fees are done. Interview opens once Finance clears your last charge slip.',
       to: StudentRoutes.interview,
       label: 'Open interview',
     };
@@ -271,7 +238,7 @@ function currentStudentStep(
   if (!interview) {
     return {
       title: 'Waiting for interview scheduling',
-      body: 'Preparation is complete. Interview details will appear when staff unlock them.',
+      body: 'Interview staff will schedule your session. Details appear on the Interview page.',
       to: StudentRoutes.interview,
       label: 'Open interview',
     };
@@ -281,7 +248,7 @@ function currentStudentStep(
     if (isInterviewMeetingCancelled(interview)) {
       return {
         title: 'Interview meeting cancelled',
-        body: 'Preparation staff cancelled the session. You will be notified when a new time is scheduled.',
+        body: 'Interview staff cancelled the session. You will be notified when a new time is scheduled.',
         to: StudentRoutes.interview,
         label: 'Open interview',
       };
@@ -396,12 +363,6 @@ function studentProgressSteps(
       color: '#fbbf24',
     },
     {
-      id: 'preparation',
-      label: 'Prep',
-      done: Boolean(status?.application?.preparation?.completed_at),
-      color: '#ff6b84',
-    },
-    {
       id: 'interview',
       label: 'Interview',
       done: isInterviewJourneyComplete(status?.application?.interview),
@@ -425,16 +386,6 @@ function studentProgressPercent(
   const steps = studentProgressSteps(status, profile, appointments);
   const done = steps.filter((step) => step.done).length;
   return Math.round((done / steps.length) * 100);
-}
-
-function initials(name: string | null | undefined) {
-  if (!name) return '?';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 function formatWhen(value: string | null | undefined) {
@@ -624,16 +575,6 @@ function StudentHome({ displayName }: { displayName: string | null }) {
         body: status?.application?.interview?.meeting_ended_at
           ? `Finished ${formatWhen(status.application.interview.meeting_ended_at)}`
           : 'Interview stage completed',
-        tone: 'ok',
-        badge: 'Completed',
-        to: StudentRoutes.interview,
-      });
-    } else if (status?.application?.preparation?.completed_at) {
-      items.push({
-        kind: 'step',
-        id: 'step-interview',
-        title: 'Interview preparation',
-        body: `Completed ${formatWhen(status.application.preparation.completed_at)}`,
         tone: 'ok',
         badge: 'Completed',
         to: StudentRoutes.interview,
@@ -861,8 +802,6 @@ function SuperAdminHome({
 }: {
   routes: ReturnType<typeof departmentRoutes>;
 }) {
-  const [inboxStudentId, setInboxStudentId] = useState<number | null>(null);
-
   const studentsQuery = useQuery({
     queryKey: ['consultant-students-progress'],
     queryFn: async () => {
@@ -870,16 +809,6 @@ function SuperAdminHome({
         '/consultant/students/progress',
       );
       return data.data;
-    },
-  });
-
-  const messagesQuery = useQuery({
-    queryKey: ['chat-conversations'],
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ChatConversation[]; unread_count: number }>(
-        '/chat/conversations',
-      );
-      return data;
     },
   });
 
@@ -902,16 +831,52 @@ function SuperAdminHome({
   });
 
   const students = studentsQuery.data ?? [];
-  const conversations = messagesQuery.data?.data ?? [];
   const documents = documentsQuery.data ?? [];
   const pendingDocs = documents.filter((d) => d.status === 'pending').length;
-  const unreadMessages = messagesQuery.data?.unread_count ?? 0;
   const unreadNotices = notificationsQuery.data?.unread_count ?? 0;
-  const inboxStudent = students.find((student) => student.id === inboxStudentId) ?? null;
-  const inboxConversations = useMemo(() => {
-    if (!inboxStudentId) return conversations;
-    return conversations.filter((conversation) => conversation.other_user.id === inboxStudentId);
-  }, [conversations, inboxStudentId]);
+
+  const tools = [
+    {
+      to: routes.studentInfo.students,
+      title: 'All students',
+      body: 'Full progress directory',
+    },
+    {
+      to: routes.documents.root,
+      title: 'Documents',
+      body: pendingDocs ? `${pendingDocs} pending review` : 'Review student uploads',
+    },
+    {
+      to: routes.leads.root,
+      title: 'Leads',
+      body: 'Incoming forms and conversions',
+    },
+    {
+      to: routes.finance.root,
+      title: 'Finance',
+      body: 'Charge slips and payment reviews',
+    },
+    {
+      to: routes.universities.root,
+      title: 'Universities',
+      body: 'Catalog and assignments',
+    },
+    {
+      to: routes.interview.root,
+      title: 'Interview',
+      body: 'Preparation and scheduling',
+    },
+    {
+      to: routes.visa.root,
+      title: 'File Making',
+      body: 'Embassy appointments',
+    },
+    {
+      to: routes.team.root,
+      title: 'Team & access',
+      body: unreadNotices ? `${unreadNotices} notices` : 'People and permissions',
+    },
+  ];
 
   return (
     <AppShell
@@ -924,118 +889,18 @@ function SuperAdminHome({
           loading={studentsQuery.isLoading}
           studentHref={(id) => routes.studentInfo.student(id)}
           viewAllHref={routes.studentInfo.students}
-          onSelectedStudentChange={setInboxStudentId}
         />
 
-        <div className="dash-quick-actions dash-quick-actions-row">
-          <Link className="dash-quick-card" to={routes.studentInfo.students}>
-            <span className="dash-quick-icon purple">🎓</span>
-            <strong>All students</strong>
-            <span>Full progress directory</span>
-          </Link>
-          <Link className="dash-quick-card" to={routes.documents.root}>
-            <span className="dash-quick-icon blue">📄</span>
-            <strong>Documents</strong>
-            <span>{pendingDocs ? `${pendingDocs} pending` : 'Review uploads'}</span>
-          </Link>
-          <Link className="dash-quick-card" to={routes.messages.root}>
-            <span className="dash-quick-icon lilac">💬</span>
-            <strong>Messages</strong>
-            <span>{unreadMessages ? `${unreadMessages} unread` : 'All clear'}</span>
-          </Link>
-          <Link className="dash-quick-card" to={routes.team.root}>
-            <span className="dash-quick-icon coral">👥</span>
-            <strong>Team</strong>
-            <span>{unreadNotices ? `${unreadNotices} notices` : 'Manage access'}</span>
-          </Link>
-        </div>
-
-        <PageSplit
-          main={
-            <PageSection
-              title="Inbox"
-              action={
-                <Link className="text-link-btn" to={routes.messages.root}>
-                  Open
-                </Link>
-              }>
-              <div className="panel dash-activity">
-                {inboxConversations.slice(0, 5).map((conversation) => (
-                  <Link
-                    key={conversation.id}
-                    className="dash-activity-row"
-                    to={routes.messages.root}>
-                    <span className="dash-activity-avatar purple">
-                      {initials(conversation.other_user.name)}
-                    </span>
-                    <div className="dash-activity-copy">
-                      <strong>{conversation.other_user.name}</strong>
-                      <span>
-                        {conversation.department_label
-                          ? `${conversation.department_label}, `
-                          : ''}
-                        {conversation.last_message?.body ?? 'No messages yet'}
-                      </span>
-                    </div>
-                    {(conversation.unread_count ?? 0) > 0 ? (
-                      <span className="chat-unread-badge">{conversation.unread_count}</span>
-                    ) : null}
-                  </Link>
-                ))}
-                {!messagesQuery.isLoading && inboxConversations.length === 0 ? (
-                  <p className="muted">
-                    {inboxStudent
-                      ? `No messages from ${inboxStudent.name} yet.`
-                      : 'No student messages yet.'}
-                  </p>
-                ) : null}
-              </div>
-            </PageSection>
-          }
-          side={
-            <PageSection title="Departments">
-              <div className="workspace-list">
-                <Link className="workspace-link" to={routes.finance.root}>
-                  <div>
-                    <strong>Finance</strong>
-                    <span>Charge slips & reviews</span>
-                  </div>
-                  <span className="workspace-link-meta">Open</span>
-                </Link>
-                <Link className="workspace-link" to={routes.universities.root}>
-                  <div>
-                    <strong>Universities</strong>
-                    <span>Catalog & assignments</span>
-                  </div>
-                  <span className="workspace-link-meta">Open</span>
-                </Link>
-                <Link className="workspace-link" to={routes.interview.root}>
-                  <div>
-                    <strong>Interview</strong>
-                    <span>Preparation & scheduling</span>
-                  </div>
-                  <span className="workspace-link-meta">Open</span>
-                </Link>
-                <Link className="workspace-link" to={routes.visa.root}>
-                  <div>
-                    <strong>File Making</strong>
-                    <span>Embassy appointments</span>
-                  </div>
-                  <span className="workspace-link-meta">Open</span>
-                </Link>
-                <Link className="workspace-link" to={routes.team.root}>
-                  <div>
-                    <strong>Team & access</strong>
-                    <span>
-                      {unreadNotices ? `${unreadNotices} notices` : 'People & permissions'}
-                    </span>
-                  </div>
-                  <span className="workspace-link-meta">Manage</span>
-                </Link>
-              </div>
-            </PageSection>
-          }
-        />
+        <PageSection title="Workspace tools">
+          <div className="dash-quick-actions dash-quick-actions-row dash-staff-quick">
+            {tools.map((tool) => (
+              <Link key={tool.to + tool.title} className="dash-quick-card dash-staff-quick-card" to={tool.to}>
+                <strong>{tool.title}</strong>
+                <span>{tool.body}</span>
+              </Link>
+            ))}
+          </div>
+        </PageSection>
       </div>
     </AppShell>
   );
@@ -1071,19 +936,68 @@ function StaffHome({
     },
   });
 
-  const messagesQuery = useQuery({
-    queryKey: ['chat-conversations'],
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ChatConversation[]; unread_count: number }>(
-        '/chat/conversations',
-      );
-      return data;
-    },
-  });
-
-  const conversations = messagesQuery.data?.data ?? [];
   const students = studentsQuery.data ?? [];
   const roleLabel = organizationRoleLabel(user);
+  const departmentLabel = user?.staff_department_label ?? roleLabel;
+
+  const tools = [
+    showLeads
+      ? {
+          to: routes.leads.root,
+          title: 'Leads',
+          body: 'Review forms and create student logins',
+        }
+      : null,
+    showStudents
+      ? {
+          to: routes.studentInfo.students,
+          title: 'Students',
+          body: 'Profiles, documents, and progress',
+        }
+      : null,
+    showStudents
+      ? {
+          to: routes.formTemplates.root,
+          title: 'Form templates',
+          body: 'Shared forms for student applications',
+        }
+      : null,
+    showFinance
+      ? {
+          to: routes.finance.root,
+          title: 'Finance',
+          body: 'Charge slips and payment reviews',
+        }
+      : null,
+    showUniversities
+      ? {
+          to: routes.universities.root,
+          title: 'Universities',
+          body: 'Catalog and university records',
+        }
+      : null,
+    showUniversities
+      ? {
+          to: routes.universities.suggestions,
+          title: 'Suggestions',
+          body: 'Student university recommendations',
+        }
+      : null,
+    showInterview
+      ? {
+          to: routes.interview.root,
+          title: 'Interview',
+          body: 'Preparation and scheduling',
+        }
+      : null,
+    showVisa
+      ? {
+          to: routes.visa.root,
+          title: 'File Making',
+          body: 'Embassy appointments',
+        }
+      : null,
+  ].filter(Boolean) as { to: string; title: string; body: string }[];
 
   return (
     <AppShell
@@ -1091,163 +1005,74 @@ function StaffHome({
       title={welcomeRoleTitle('Staff')}
       subtitle={welcomeTimestamp()}>
       <div className="page-stack">
-        <PageSplit
-          main={
-            <PageSection
-              title={showStudents ? 'Students' : 'Messages'}
-              action={
-                showStudents ? (
-                  <Link className="text-link-btn" to={routes.studentInfo.students}>
-                    View all
-                  </Link>
-                ) : (
-                  <Link className="text-link-btn" to={routes.messages.root}>
-                    Open inbox
-                  </Link>
-                )
-              }>
-              <div className="panel dash-activity">
-                {showStudents ? (
-                  <>
-                    {studentsQuery.isLoading ? <p className="muted">Loading students…</p> : null}
-                    {students.slice(0, 10).map((student) => (
-                      <Link
-                        key={student.id}
-                        className="dash-activity-row"
-                        to={routes.studentInfo.student(student.id)}>
-                        <span className="dash-activity-avatar info">{initials(student.name)}</span>
-                        <div className="dash-activity-copy">
-                          <strong>{student.name}</strong>
-                          <span>{student.email}</span>
-                        </div>
-                        <span className="workspace-link-meta">Open</span>
-                      </Link>
-                    ))}
-                    {!studentsQuery.isLoading && students.length === 0 ? (
-                      <PageEmpty
-                        title="No students yet"
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    {messagesQuery.isLoading ? <p className="muted">Loading messages…</p> : null}
-                    {conversations.slice(0, 10).map((conversation) => (
-                      <Link
-                        key={conversation.id}
-                        className="dash-activity-row"
-                        to={routes.messages.root}>
-                        <span className="dash-activity-avatar purple">
-                          {initials(conversation.other_user.name)}
-                        </span>
-                        <div className="dash-activity-copy">
-                          <strong>{conversation.other_user.name}</strong>
-                          <span>
-                            {conversation.department_label
-                              ? `${conversation.department_label}, `
-                              : ''}
-                            {conversation.last_message?.body ?? 'No messages yet'}
-                          </span>
-                        </div>
-                        {(conversation.unread_count ?? 0) > 0 ? (
-                          <span className="chat-unread-badge">{conversation.unread_count}</span>
-                        ) : null}
-                      </Link>
-                    ))}
-                    {!messagesQuery.isLoading && conversations.length === 0 ? (
-                      <PageEmpty
-                        title="No messages yet"
-                      />
-                    ) : null}
-                  </>
-                )}
+        <section className="dash-staff-hero">
+          <div className="dash-staff-hero-copy">
+            <p className="dash-staff-kicker">{departmentLabel}</p>
+            <h2>Workspace overview</h2>
+            <p>Jump into your department tools{worksWithStudents ? ' and recent students' : ''}.</p>
+          </div>
+          {worksWithStudents ? (
+            <div className="dash-staff-stats">
+              <div className="dash-staff-stat">
+                <strong>{studentsQuery.isLoading ? '—' : students.length}</strong>
+                <span>Students</span>
               </div>
-            </PageSection>
-          }
-          side={
-            showStudents ? (
-              <PageSection title="Inbox">
-                <div className="panel dash-activity">
-                  {messagesQuery.isLoading ? <p className="muted">Loading…</p> : null}
-                  {conversations.slice(0, 6).map((conversation) => (
-                    <Link
-                      key={conversation.id}
-                      className="dash-activity-row"
-                      to={routes.messages.root}>
-                      <span className="dash-activity-avatar purple">
-                        {initials(conversation.other_user.name)}
-                      </span>
-                      <div className="dash-activity-copy">
-                        <strong>{conversation.other_user.name}</strong>
-                        <span>{conversation.last_message?.body ?? 'No messages yet'}</span>
-                      </div>
-                    </Link>
-                  ))}
-                  {!messagesQuery.isLoading && conversations.length === 0 ? (
-                    <p className="muted">No student messages yet.</p>
-                  ) : null}
-                </div>
-              </PageSection>
-            ) : (
-              <PageSection title="Getting started">
-                <div className="workspace-list">
-                  {showFinance ? (
-                    <Link className="workspace-link" to={routes.finance.root}>
-                      <div>
-                        <strong>Finance</strong>
-                        <span>Send slips and review payments</span>
-                      </div>
-                      <span className="workspace-link-meta">Open</span>
-                    </Link>
-                  ) : null}
-                  {showUniversities ? (
-                    <Link className="workspace-link" to={routes.universities.root}>
-                      <div>
-                        <strong>Universities</strong>
-                        <span>Catalog and assignments</span>
-                      </div>
-                      <span className="workspace-link-meta">Open</span>
-                    </Link>
-                  ) : null}
-                  {showInterview ? (
-                    <Link className="workspace-link" to={routes.interview.root}>
-                      <div>
-                        <strong>Interview</strong>
-                        <span>Preparation and scheduling</span>
-                      </div>
-                      <span className="workspace-link-meta">Open</span>
-                    </Link>
-                  ) : null}
-                  {showVisa ? (
-                    <Link className="workspace-link" to={routes.visa.root}>
-                      <div>
-                        <strong>File Making</strong>
-                        <span>Embassy appointments</span>
-                      </div>
-                      <span className="workspace-link-meta">Open</span>
-                    </Link>
-                  ) : null}
-                  {showLeads ? (
-                    <Link className="workspace-link" to={routes.leads.root}>
-                      <div>
-                        <strong>Leads</strong>
-                        <span>Review leading-page forms and create logins</span>
-                      </div>
-                      <span className="workspace-link-meta">Open</span>
-                    </Link>
-                  ) : null}
-                  <Link className="workspace-link" to={routes.messages.root}>
-                    <div>
-                      <strong>Messages</strong>
-                      <span>Department inbox</span>
-                    </div>
-                    <span className="workspace-link-meta">Chat</span>
-                  </Link>
-                </div>
-              </PageSection>
-            )
-          }
-        />
+              <div className="dash-staff-stat">
+                <strong>{tools.length}</strong>
+                <span>Department tools</span>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <PageSection title="Department tools">
+          <div
+            className={`dash-quick-actions dash-quick-actions-row dash-staff-quick${
+              tools.length <= 3 ? ' compact' : ''
+            }`}>
+            {tools.map((tool) => (
+              <Link key={tool.to + tool.title} className="dash-quick-card dash-staff-quick-card" to={tool.to}>
+                <strong>{tool.title}</strong>
+                <span>{tool.body}</span>
+              </Link>
+            ))}
+          </div>
+          {tools.length === 0 ? (
+            <PageEmpty title="No department tools assigned" body="Ask an admin if you need access." />
+          ) : null}
+        </PageSection>
+
+        {worksWithStudents ? (
+          <DirectoryList
+            title="Recent students"
+            countLabel={
+              studentsQuery.isLoading
+                ? '…'
+                : `${students.length} student${students.length === 1 ? '' : 's'}`
+            }
+            headerAction={
+              showStudents ? (
+                <Link className="text-link-btn" to={routes.studentInfo.students}>
+                  View all
+                </Link>
+              ) : null
+            }
+            items={students.map((student) => ({
+              id: student.id,
+              title: student.name,
+              subtitle: student.email,
+              href: showStudents
+                ? routes.studentInfo.student(student.id)
+                : showFinance
+                  ? routes.finance.root
+                  : showVisa
+                    ? routes.visa.root
+                    : routes.interview.root,
+            }))}
+            loading={studentsQuery.isLoading}
+            emptyTitle="No students yet"
+          />
+        ) : null}
       </div>
     </AppShell>
   );

@@ -274,18 +274,42 @@
 .field input,
 .field textarea {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, var(--line));
   border-radius: 12px;
-  background: var(--panel-muted);
+  background: var(--surface);
   padding: 13px 15px;
   font-size: 0.98rem;
   font-weight: 400;
   color: var(--ink);
   outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 4%, transparent);
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease,
     background 0.15s ease;
+}
+
+.field input[type='file'] {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.field input[type='file']::file-selector-button {
+  margin-right: 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, var(--line));
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--panel-muted);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.field input[type='file']:hover::file-selector-button {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .field textarea {
@@ -324,39 +348,11 @@
   color: var(--accent-strong);
 }
 
-.primary-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #f24e68, #e02a48);
-  color: #ffffff;
-  padding: 14px 18px;
+.auth-card .primary-btn {
+  width: 100%;
   min-height: 48px;
-  font-weight: 700;
-  font-size: 0.98rem;
   margin-top: 4px;
-  text-align: center;
-  line-height: 1.2;
-  box-shadow: 0 10px 24px rgba(242, 78, 104, 0.28);
-  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease, filter 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.primary-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(242, 78, 104, 0.34);
-}
-
-.primary-btn:active:not(:disabled) {
-  transform: translateY(1px) scale(0.98);
-}
-
-.primary-btn:disabled {
-  opacity: 0.55;
-  transform: none;
+  font-size: 0.98rem;
 }
 
 .auth-footer {
@@ -384,6 +380,51 @@
   border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line));
   border-radius: 12px;
   padding: 10px 12px;
+}
+
+.form-success {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.92rem;
+  text-align: left;
+  background: color-mix(in srgb, var(--accent-strong) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 28%, var(--line));
+  border-radius: 12px;
+  padding: 14px 14px;
+}
+
+.auth-approval-banner {
+  display: grid;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.auth-approval-banner strong {
+  font-size: 0.95rem;
+}
+
+.auth-approval-banner p {
+  margin: 0;
+}
+
+.auth-approval-banner.pending {
+  color: #8a5a00;
+  background: color-mix(in srgb, #f5b942 16%, var(--panel));
+  border: 1px solid color-mix(in srgb, #f5b942 40%, var(--line));
+}
+
+.auth-approval-banner.rejected {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line));
+}
+
+:root[data-theme='dark'] .auth-approval-banner.pending,
+html.dark .auth-approval-banner.pending {
+  color: #ffd789;
 }
 
 @media (min-width: 900px) {

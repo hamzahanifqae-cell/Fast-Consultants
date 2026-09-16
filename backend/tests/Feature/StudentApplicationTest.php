@@ -27,7 +27,7 @@ class StudentApplicationTest extends TestCase
         $this->seed(RoleSeeder::class);
     }
 
-    public function test_preparation_unlocks_when_documents_and_charges_are_accepted(): void
+    public function test_interview_unlocks_when_documents_and_charges_are_accepted(): void
     {
         $student = User::factory()->student()->create();
         $consultant = User::factory()->consultant()->create();
@@ -66,12 +66,13 @@ class StudentApplicationTest extends TestCase
         $this->getJson('/api/student/application-status')
             ->assertOk()
             ->assertJsonPath('data.application.everything_accepted', true)
-            ->assertJsonPath('data.application.stage', 'preparation')
-            ->assertJsonPath('data.preparation_available', true)
-            ->assertJsonPath('data.current_status', 'Preparation');
+            ->assertJsonPath('data.application.stage', 'interview')
+            ->assertJsonPath('data.preparation_available', false)
+            ->assertJsonPath('data.interview_available', true)
+            ->assertJsonPath('data.current_status', 'Interview');
     }
 
-    public function test_consultant_can_unlock_interview_after_preparation(): void
+    public function test_consultant_can_schedule_interview_after_fees_clear(): void
     {
         $student = User::factory()->student()->create();
         $consultant = User::factory()->consultant()->create();

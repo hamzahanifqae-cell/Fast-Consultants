@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
+import { DirectoryList } from '@/components/directory-list';
 import { PageSection, PageSplit } from '@/components/page-fill';
 import { AppShell } from '@/components/shell';
 import { api } from '@/lib/api';
@@ -10,15 +11,6 @@ import { hasPermission } from '@/lib/roles';
 import type { StudentProgressRow } from '@/lib/student-progress';
 import { useAuthStore } from '@/stores/auth-store';
 import './dashboard.css';
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 export function StudentInfoDepartmentPage() {
   const user = useAuthStore((state) => state.user);
@@ -46,38 +38,36 @@ export function StudentInfoDepartmentPage() {
       <div className="page-stack">
         <PageSplit
           main={
-            <PageSection
-              title="Recent students"
-              action={
-                showStudents ? (
+            showStudents ? (
+              <DirectoryList
+                title="Students"
+                countLabel={
+                  studentsQuery.isLoading
+                    ? '…'
+                    : `${count} student${count === 1 ? '' : 's'}`
+                }
+                headerAction={
                   <Link className="text-link-btn" to={routes.studentInfo.students}>
                     View all
                   </Link>
-                ) : null
-              }>
-              <div className="panel dash-activity">
-                {studentsQuery.isLoading ? <p className="muted">Loading…</p> : null}
-                {students.slice(0, 8).map((student) => (
-                  <Link
-                    key={student.id}
-                    className="dash-activity-row"
-                    to={routes.studentInfo.student(student.id)}>
-                    <span className="dash-activity-avatar info">{initials(student.name)}</span>
-                    <div className="dash-activity-copy">
-                      <strong>{student.name}</strong>
-                      <span>{student.email}</span>
-                    </div>
-                    <div className="student-info-progress-chip">
-                      <strong>{student.overall_percent}%</strong>
-                      <span>{student.current_status}</span>
-                    </div>
-                  </Link>
-                ))}
-                {!studentsQuery.isLoading && students.length === 0 ? (
-                  <p className="muted">No students found yet.</p>
-                ) : null}
-              </div>
-            </PageSection>
+                }
+                items={students.map((student) => ({
+                  id: student.id,
+                  title: student.name,
+                  subtitle: student.email,
+                  searchText: student.current_status,
+                  href: routes.studentInfo.student(student.id),
+                  actionLabel:
+                    student.overall_percent != null ? `${student.overall_percent}%` : 'Open',
+                }))}
+                loading={studentsQuery.isLoading}
+                emptyTitle="No students found yet"
+              />
+            ) : (
+              <PageSection title="Students">
+                <p className="muted">You do not have access to the student directory.</p>
+              </PageSection>
+            )
           }
           side={
             <PageSection title="Quick links">

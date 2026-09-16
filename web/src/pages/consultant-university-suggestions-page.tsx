@@ -171,7 +171,7 @@ export function ConsultantUniversitySuggestionsPage() {
                         </button>
                         <button
                           type="button"
-                          className="ghost-btn danger suggestion-reject-btn"
+                          className="ghost-btn danger"
                           disabled={accept.isPending || reject.isPending}
                           onClick={() => reject.mutate(item.id)}>
                           Reject

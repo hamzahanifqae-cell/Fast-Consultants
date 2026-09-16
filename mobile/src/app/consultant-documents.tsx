@@ -421,7 +421,7 @@ export default function ConsultantDocumentsScreen() {
                               : 1,
                         },
                       ]}>
-                      <ThemedText type="smallBold" style={styles.buttonText}>
+                      <ThemedText type="smallBold" style={styles.rejectButtonText}>
                         Reject document
                       </ThemedText>
                     </Pressable>
@@ -506,10 +506,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     alignItems: 'center',
     marginTop: Spacing.two,
+    minHeight: 44,
+    borderWidth: 1,
   },
-  approve: { backgroundColor: Brand.success },
-  reject: { backgroundColor: Brand.danger },
-  view: { backgroundColor: Brand.primary },
+  approve: {
+    backgroundColor: Brand.primary,
+    borderColor: Brand.primaryStrong,
+  },
+  reject: {
+    backgroundColor: 'rgba(242, 78, 104, 0.08)',
+    borderColor: 'rgba(242, 78, 104, 0.32)',
+  },
+  view: {
+    backgroundColor: Brand.canvas,
+    borderColor: Brand.line,
+  },
   buttonText: { color: '#fff' },
+  rejectButtonText: { color: Brand.danger, fontWeight: '700' },
   error: { color: '#D92D20' },
 });

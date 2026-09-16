@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 import { AuthHeroPanel } from '@/components/auth-hero-panel';
 import { AuthSheetLayout } from '@/components/auth-sheet-layout';
@@ -20,6 +21,13 @@ type Props = {
   portal: Portal;
 };
 
+type ApprovalError = {
+  message?: string;
+  approval_status?: 'pending' | 'rejected' | string;
+  approval_status_label?: string;
+  rejection_reason?: string | null;
+};
+
 export function LoginPage({ portal }: Props) {
   const setSession = useAuthStore((state) => state.setSession);
   const navigate = useNavigate();
@@ -28,6 +36,7 @@ export function LoginPage({ portal }: Props) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'rejected' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const label = portalLabel(portal);
@@ -36,6 +45,7 @@ export function LoginPage({ portal }: Props) {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setApprovalStatus(null);
     setSubmitting(true);
 
     try {
@@ -57,6 +67,14 @@ export function LoginPage({ portal }: Props) {
       setSession(portal, data.token, data.user);
       navigate(homeForPortal(portal), { replace: true });
     } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 403 && isStudent) {
+        const data = err.response.data as ApprovalError | undefined;
+        if (data?.approval_status === 'pending' || data?.approval_status === 'rejected') {
+          setApprovalStatus(data.approval_status);
+          setError(data.message ?? getApiErrorMessage(err, 'Could not sign in.'));
+          return;
+        }
+      }
       setError(getApiErrorMessage(err, 'Could not sign in.'));
     } finally {
       setSubmitting(false);
@@ -113,7 +131,21 @@ export function LoginPage({ portal }: Props) {
             />
           </label>
 
-          {error ? <p className="form-error">{error}</p> : null}
+          {approvalStatus === 'pending' ? (
+            <div className="auth-approval-banner pending">
+              <strong>Pending approval</strong>
+              <p>{error}</p>
+            </div>
+          ) : null}
+
+          {approvalStatus === 'rejected' ? (
+            <div className="auth-approval-banner rejected">
+              <strong>Rejected</strong>
+              <p>{error}</p>
+            </div>
+          ) : null}
+
+          {error && !approvalStatus ? <p className="form-error">{error}</p> : null}
 
           <button className="primary-btn" disabled={submitting} type="submit">
             {submitting ? 'Signing in…' : 'Sign In'}

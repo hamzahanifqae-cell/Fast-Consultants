@@ -1,10 +1,9 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Brand } from '@/constants/theme';
 import { useBottomSafeInset } from '@/hooks/use-bottom-safe-inset';
 import { useTheme } from '@/hooks/use-theme';
+import { AppButton } from '@/components/ui/app-button';
 
 type AuthSheetProps = {
   children: ReactNode;
@@ -39,26 +38,7 @@ export function AuthSheet({
       <View style={fill ? styles.sheetBodyFill : styles.sheetBodyAuto}>{children}</View>
 
       <View style={[styles.footer, { paddingBottom: bottomPad }]}>
-        <Pressable
-          accessibilityLabel={label}
-          accessibilityRole="button"
-          disabled={disabled}
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.ctaWrap,
-            {
-              opacity: disabled ? 0.5 : pressed ? 0.88 : 1,
-              transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
-            },
-          ]}>
-          <LinearGradient
-            colors={[...Brand.buttonGradient]}
-            end={{ x: 1, y: 1 }}
-            start={{ x: 0, y: 0 }}
-            style={styles.cta}>
-            <Text style={styles.ctaLabel}>{label}</Text>
-          </LinearGradient>
-        </Pressable>
+        <AppButton disabled={disabled} label={label} onPress={onPress} />
       </View>
     </View>
   );
@@ -91,22 +71,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: 28,
     paddingTop: 8,
-  },
-  ctaWrap: {
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  cta: {
-    minHeight: 54,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  ctaLabel: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
   },
 });

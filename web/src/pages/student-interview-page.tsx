@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { InterviewMeetingSection } from '@/components/interview-meeting-section';
@@ -9,6 +8,9 @@ import { api, getApiErrorMessage } from '@/lib/api';
 import { StudentRoutes } from '@/lib/department-routes';
 import {
   formatInterviewWhen,
+  interviewSectionProgress as buildInterviewProgress,
+  interviewStatusPillLabel,
+  isInterviewJourneyComplete,
   isInterviewMeetingCancelled,
   isOnlineInterviewMode,
   meetingScheduleSummary,
@@ -29,77 +31,8 @@ function formatWhen(value: string | null) {
   });
 }
 
-function interviewSectionProgress(status: ApplicationStatusResponse | undefined) {
-  if (!status) {
-    return {
-      percent: 0,
-      title: 'Interview incomplete',
-      description: 'Loading your interview progress.',
-    };
-  }
-
-  const prepDone = Boolean(status.application.preparation.completed_at);
-  const interview = status.application.interview;
-  const meetingDone = Boolean(interview.meeting_ended_at);
-  const scheduled = Boolean(interview.at);
-
-  if (!status.preparation_available) {
-    return {
-      percent: 0,
-      title: 'Interview locked',
-      description: 'Opens after documents and charge slips are approved.',
-    };
-  }
-
-  if (!prepDone) {
-    return {
-      percent: 25,
-      title: 'Interview incomplete',
-      description: 'Review preparation notes and mark them complete.',
-    };
-  }
-
-  if (meetingDone && !scheduled) {
-    return {
-      percent: 100,
-      title: 'Interview complete',
-      description: 'Preparation done and your session has finished.',
-    };
-  }
-
-  if (scheduled) {
-    return {
-      percent: 75,
-      title: 'Interview in progress',
-      description: 'Preparation complete — meeting is scheduled.',
-    };
-  }
-
-  if (status.interview_available) {
-    return {
-      percent: 50,
-      title: 'Interview in progress',
-      description: 'Preparation complete — waiting for a meeting time.',
-    };
-  }
-
-  return {
-    percent: 50,
-    title: 'Interview in progress',
-    description: 'Preparation complete — waiting for interview unlock.',
-  };
-}
-
-const DEFAULT_PREP_TIPS = [
-  'Review your personal details and uploaded documents.',
-  'Check university requirements for your shortlisted programmes.',
-  'Practice common admission questions out loud.',
-  'Keep your passport and key documents ready for the session.',
-];
-
 export function StudentInterviewPage() {
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
 
   const statusQuery = useQuery({
     queryKey: ['student-application-status'],
@@ -109,20 +42,6 @@ export function StudentInterviewPage() {
       );
       return data.data;
     },
-  });
-
-  const completePrep = useMutation({
-    mutationFn: async () => {
-      const { data } = await api.post<{ data: ApplicationStatusResponse }>(
-        '/student/application/complete-preparation',
-      );
-      return data.data;
-    },
-    onSuccess: async () => {
-      setError(null);
-      await queryClient.invalidateQueries({ queryKey: ['student-application-status'] });
-    },
-    onError: (err) => setError(getApiErrorMessage(err, 'Could not mark preparation complete.')),
   });
 
   const followupPreference = useMutation({
@@ -140,14 +59,10 @@ export function StudentInterviewPage() {
   });
 
   const status = statusQuery.data;
-  const preparation = status?.application?.preparation;
   const interview = status?.application?.interview;
-  const prepLocked = Boolean(status && !status.preparation_available);
   const interviewLocked = Boolean(status && !status.interview_available);
   const online = isOnlineInterviewMode(interview?.mode);
   const meetingCancelled = isInterviewMeetingCancelled(interview);
-  const prepDone = Boolean(preparation?.completed_at);
-  const customPrepBody = preparation?.body?.trim() ?? '';
   const showFollowupChoice =
     Boolean(interview?.unlocked_at) &&
     Boolean(interview?.meeting_ended_at) &&
@@ -157,18 +72,14 @@ export function StudentInterviewPage() {
   const meetingSummary = meetingScheduleSummary(interview, {
     interviewAvailable: status?.interview_available,
   });
-  const progress = interviewSectionProgress(status);
-
-  const prepStageState = prepLocked ? 'locked' : prepDone ? 'done' : 'active';
-  const meetingStageState = interviewLocked
-    ? 'locked'
-    : interview?.meeting_ended_at && !interview.at
-      ? 'done'
-      : interview?.at
-        ? 'active'
-        : prepDone
-          ? 'waiting'
-          : 'locked';
+  const progress = status
+    ? buildInterviewProgress(status.interview_available, interview)
+    : {
+        percent: 0,
+        title: 'Interview',
+        description: 'Loading your interview progress.',
+        complete: false,
+      };
 
   return (
     <AppShell badge="Student" title="Interview">
@@ -180,176 +91,51 @@ export function StudentInterviewPage() {
           percent={progress.percent}
         />
 
-        <div className="interview-stage-rail" aria-label="Interview stages">
-          <article className={`interview-stage ${prepStageState}`}>
-            <span className="interview-stage-index" aria-hidden>
-              1
-            </span>
-            <div>
-              <strong>Preparation</strong>
-              <span>
-                {prepLocked
-                  ? 'Locked until documents and fees clear'
-                  : prepDone
-                    ? `Completed ${formatWhen(preparation?.completed_at ?? null) ?? ''}`
-                    : 'Review notes, then mark complete'}
-              </span>
-            </div>
-            <span className={`status-pill${prepDone ? ' success' : prepLocked ? '' : ' warn'}`}>
-              {prepLocked ? 'Locked' : prepDone ? 'Done' : 'To do'}
-            </span>
-          </article>
-          <article className={`interview-stage ${meetingStageState}`}>
-            <span className="interview-stage-index" aria-hidden>
-              2
-            </span>
-            <div>
-              <strong>Meeting</strong>
-              <span>
-                {interviewLocked
-                  ? 'Scheduled after preparation'
-                  : meetingCancelled
-                    ? 'Cancelled — waiting for reschedule'
-                    : interview?.at
-                      ? formatInterviewWhen(interview.at)
-                      : interview?.meeting_ended_at
-                        ? 'Session finished'
-                        : 'Waiting for staff to schedule'}
-              </span>
-            </div>
-            <span
-              className={`status-pill${
-                meetingStageState === 'done'
-                  ? ' success'
-                  : meetingStageState === 'active'
-                    ? ' warn'
-                    : meetingCancelled
-                      ? ' danger'
-                      : ''
-              }`}>
-              {meetingCancelled
-                ? 'Cancelled'
-                : meetingStageState === 'done'
-                  ? 'Done'
-                  : meetingStageState === 'active'
-                    ? 'Scheduled'
-                    : meetingStageState === 'waiting'
-                      ? 'Pending'
-                      : 'Locked'}
-            </span>
-          </article>
-        </div>
-
         <PageSection
-          title={preparation?.title ?? 'Interview preparation'}
-          subtitle="Get ready before staff schedule your session."
-          action={
-            prepDone ? <span className="status-pill success">Complete</span> : undefined
-          }>
-          <section className="panel interview-panel">
+          title="Your interview"
+          subtitle="After fees are cleared, staff schedule your session here. Join online when the timer opens.">
+          <section className="panel interview-panel interview-panel-single">
             {statusQuery.isLoading ? <p className="muted">Loading…</p> : null}
 
-            {prepLocked ? (
+            {interviewLocked ? (
               <PageEmpty
-                title="Preparation is locked"
-                body="Your documents and charge slips need to be accepted before preparation unlocks."
+                title="Interview is locked"
+                body="Your documents and charge slips need to be accepted before the interview stage opens."
                 actionLabel="View my status"
                 actionTo={StudentRoutes.status}
               />
             ) : null}
 
-            {!prepLocked && status ? (
-              <div className="interview-prep-body">
-                {customPrepBody ? (
-                  <p className="interview-prep-notes">{customPrepBody}</p>
-                ) : (
-                  <>
-                    <p className="interview-lead">
-                      Staff have unlocked preparation. Work through these points, then mark complete
-                      when you are ready for scheduling.
-                    </p>
-                    <ul className="interview-checklist">
-                      {DEFAULT_PREP_TIPS.map((tip) => (
-                        <li key={tip}>{tip}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                {prepDone ? (
-                  <div className="interview-complete-banner">
-                    <span className="status-pill success">Preparation marked complete</span>
-                    <p>
-                      {formatWhen(preparation?.completed_at ?? null)
-                        ? `Saved ${formatWhen(preparation?.completed_at ?? null)}.`
-                        : 'Saved.'}{' '}
-                      Staff can now schedule your interview meeting.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="interview-prep-actions">
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      disabled={completePrep.isPending}
-                      onClick={() => completePrep.mutate()}>
-                      {completePrep.isPending ? 'Saving…' : 'Mark preparation complete'}
-                    </button>
-                    <p className="field-hint">You can still review notes after marking complete.</p>
-                  </div>
-                )}
-
-                {error ? <p className="form-error">{error}</p> : null}
-              </div>
-            ) : null}
-          </section>
-        </PageSection>
-
-        <PageSection
-          title="Interview meeting"
-          subtitle="Timer and video unlock when staff set your session time."
-          action={
-            !interviewLocked && interview?.at ? (
-              <span className="status-pill warn">Scheduled</span>
-            ) : undefined
-          }>
-          <section className="panel interview-panel">
-            {interviewLocked ? (
-              <div className="interview-waiting">
-                <div className="interview-waiting-icon" aria-hidden>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
-                    <path
-                      d="M12 7v5l3 2"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <strong>Waiting for schedule</strong>
-                  <p>
-                    The meeting timer and video unlock after staff schedule your interview. Finish
-                    preparation first if you have not already.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-            {!interviewLocked && interview?.meeting_ended_at && !interview.at ? (
-              <p className="interview-lead" style={{ marginTop: 0 }}>
-                Previous session finished
-                {interview.meeting_ended_at
-                  ? ` on ${formatWhen(interview.meeting_ended_at)}`
-                  : ''}
-                . {meetingSummary.hint}.
-              </p>
-            ) : null}
-
             {!interviewLocked && interview ? (
               <div className="interview-meeting-body">
+                <div className="interview-status-row">
+                  <span
+                    className={`status-pill${
+                      meetingCancelled
+                        ? ' danger'
+                        : interview.at
+                          ? ' warn'
+                          : isInterviewJourneyComplete(interview)
+                            ? ' success'
+                            : ''
+                    }`}>
+                    {interviewStatusPillLabel(interview)}
+                  </span>
+                  {interview.at ? (
+                    <strong className="interview-status-when">{formatInterviewWhen(interview.at)}</strong>
+                  ) : null}
+                </div>
+
+                {interview.meeting_ended_at && !interview.at ? (
+                  <p className="interview-lead">
+                    Previous session finished
+                    {interview.meeting_ended_at
+                      ? ` on ${formatWhen(interview.meeting_ended_at)}`
+                      : ''}
+                    . {meetingSummary.hint}.
+                  </p>
+                ) : null}
+
                 <div className="interview-meta-grid">
                   <div className="interview-meta">
                     <span>Status</span>
@@ -360,14 +146,9 @@ export function StudentInterviewPage() {
                     <div className="interview-meta">
                       <span>Mode</span>
                       <strong>{interview.mode}</strong>
-                      <em>{online ? 'Join from this page when the timer opens' : 'Attend in person'}</em>
-                    </div>
-                  ) : null}
-                  {interview.at ? (
-                    <div className="interview-meta">
-                      <span>When</span>
-                      <strong>{formatInterviewWhen(interview.at)}</strong>
-                      <em>Local time on your device</em>
+                      <em>
+                        {online ? 'Join from this page when the timer opens' : 'Attend in person'}
+                      </em>
                     </div>
                   ) : null}
                   {!online && interview.location ? (
@@ -381,7 +162,7 @@ export function StudentInterviewPage() {
 
                 {meetingCancelled ? (
                   <div className="interview-alert danger">
-                    <span className="status-pill danger">Meeting cancelled</span>
+                    <strong>Meeting cancelled</strong>
                     <p>
                       Staff cancelled this meeting. You will be notified when a new session is
                       scheduled.
@@ -475,7 +256,7 @@ export function StudentInterviewPage() {
                     </div>
                     <div>
                       <strong>No meeting scheduled yet</strong>
-                      <p>Staff will set the next session time. You will see the timer here when it is booked.</p>
+                      <p>Staff will set your session time. The timer and join button appear here when it is booked.</p>
                     </div>
                   </div>
                 ) : null}
